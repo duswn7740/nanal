@@ -2,7 +2,7 @@ import axios from 'axios';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 
 // ⚠️ Railway 배포 URL로 교체해줘요 (예: https://nanal-backend.railway.app)
-const BASE_URL = 'http://192.168.0.22:3000/api';
+const BASE_URL = 'https://nanal-production.up.railway.app/api';
 
 const api = axios.create({
   baseURL: BASE_URL,
