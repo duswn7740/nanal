@@ -1,5 +1,5 @@
 import React from 'react';
-import { View, Text, TouchableOpacity, StyleSheet } from 'react-native';
+import { View, Text, TouchableOpacity, StyleSheet, StatusBar, Platform } from 'react-native';
 import { colors, typography, fontFamily, spacing } from '../theme';
 
 /**
@@ -34,7 +34,8 @@ export default function Header({ title, onBack, right }) {
 
 const styles = StyleSheet.create({
   container: {
-    height: 56,
+    paddingTop: Platform.OS === 'android' ? StatusBar.currentHeight : 0,
+    height: 56 + (Platform.OS === 'android' ? StatusBar.currentHeight : 0),
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',

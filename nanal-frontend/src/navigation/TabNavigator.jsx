@@ -55,8 +55,8 @@ const styles = StyleSheet.create({
     backgroundColor: colors.surface,
     borderTopColor: colors.border,
     borderTopWidth: 1,
-    height: 60,
-    paddingBottom: 6,
+    height: 80,
+    paddingBottom: 24,
     paddingTop: 6,
   },
   icon: {

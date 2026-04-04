@@ -81,7 +81,7 @@ export default function HomeScreen() {
 
   return (
     <SafeAreaView style={styles.safeArea}>
-      <Header title="나날이 트래커" />
+      <Header title="나날 - 습관트래커" />
 
       {error ? (
         <View style={styles.center}>
