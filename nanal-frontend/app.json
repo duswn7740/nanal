@@ -1,0 +1,42 @@
+{
+  "expo": {
+    "name": "nanal",
+    "slug": "nanal",
+    "version": "1.0.0",
+    "orientation": "portrait",
+    "icon": "./assets/avatar/flower_lv4.png",
+    "userInterfaceStyle": "light",
+    "splash": {
+      "image": "./assets/splash-icon.png",
+      "resizeMode": "contain",
+      "backgroundColor": "#ffffff"
+    },
+    "ios": {
+      "supportsTablet": true
+    },
+    "android": {
+      "adaptiveIcon": {
+        "backgroundColor": "#F9F9F9",
+        "foregroundImage": "./assets/avatar/flower_lv4.png"
+      },
+      "package": "com.y83849455.nanal",
+      "usesCleartextTraffic": true
+    },
+    "web": {
+      "favicon": "./assets/favicon.png"
+    },
+    "fonts": [
+      "./assets/fonts/Galmuri11.ttf",
+      "./assets/fonts/Galmuri11-Bold.ttf",
+      "./assets/fonts/Galmuri14.ttf"
+    ],
+    "plugins": [
+      "expo-font"
+    ],
+    "extra": {
+      "eas": {
+        "projectId": "bebfa546-c7ad-4dd6-a270-e5350df8a776"
+      }
+    }
+  }
+}

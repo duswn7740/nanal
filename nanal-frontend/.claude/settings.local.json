@@ -1,0 +1,12 @@
+{
+  "permissions": {
+    "allow": [
+      "Read(//c/Users/duswn/Desktop/연주/project/nanal/nanal-backend/src/**)",
+      "Read(//c/Users/duswn/Desktop/연주/project/nanal/nanal-backend/src/config/**)",
+      "Read(//c/Users/duswn/Desktop/연주/project/nanal/nanal-backend/src/routes/**)",
+      "Read(//c/Users/duswn/Desktop/연주/project/nanal/nanal-backend/src/controllers/**)",
+      "Read(//c/Users/duswn/Desktop/연주/project/nanal/nanal-backend/src/middleware/**)",
+      "Read(//c/Users/duswn/Desktop/연주/project/nanal/nanal-backend/**)"
+    ]
+  }
+}
