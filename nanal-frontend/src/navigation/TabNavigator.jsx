@@ -1,7 +1,7 @@
 import React from 'react';
 import { createBottomTabNavigator } from '@react-navigation/bottom-tabs';
-import { Text, StyleSheet } from 'react-native';
-import { colors, typography } from '../theme';
+import { Image, Text, StyleSheet } from 'react-native';
+import { colors, typography, fontFamily } from '../theme';
 
 import HomeScreen from '../screens/HomeScreen';
 import CalendarScreen from '../screens/CalendarScreen';
@@ -11,10 +11,26 @@ import SettingsScreen from '../screens/SettingsScreen';
 const Tab = createBottomTabNavigator();
 
 const TABS = [
-  { name: 'Home',      component: HomeScreen,      label: '홈',    icon: '🌱' },
-  { name: 'Calendar',  component: CalendarScreen,   label: '달력',  icon: '📅' },
-  { name: 'Character', component: CharacterScreen,  label: '캐릭터', icon: '🐣' },
-  { name: 'Settings',  component: SettingsScreen,   label: '설정',  icon: '⚙️' },
+  {
+    name: 'Home', component: HomeScreen, label: '홈',
+    active: require('../../assets/icons/home_active.png'),
+    inactive: require('../../assets/icons/home_unactive.png'),
+  },
+  {
+    name: 'Calendar', component: CalendarScreen, label: '달력',
+    active: require('../../assets/icons/calendar_active.png'),
+    inactive: require('../../assets/icons/calendar_unactive.png'),
+  },
+  {
+    name: 'Character', component: CharacterScreen, label: '캐릭터',
+    active: require('../../assets/icons/character_active.png'),
+    inactive: require('../../assets/icons/character_unactive.png'),
+  },
+  {
+    name: 'Settings', component: SettingsScreen, label: '설정',
+    active: require('../../assets/icons/settings_active.png'),
+    inactive: require('../../assets/icons/settings_unactive.png'),
+  },
 ];
 
 export default function TabNavigator() {
@@ -28,17 +44,17 @@ export default function TabNavigator() {
         tabBarLabel: ({ focused, color }) => {
           const tab = TABS.find(t => t.name === route.name);
           return (
-            <Text style={[styles.label, { color }]}>
-              {tab?.label}
-            </Text>
+            <Text style={[styles.label, { color }]}>{tab?.label}</Text>
           );
         },
         tabBarIcon: ({ focused }) => {
           const tab = TABS.find(t => t.name === route.name);
           return (
-            <Text style={[styles.icon, focused && styles.iconFocused]}>
-              {tab?.icon}
-            </Text>
+            <Image
+              source={focused ? tab.active : tab.inactive}
+              style={styles.icon}
+              resizeMode="contain"
+            />
           );
         },
       })}
@@ -60,13 +76,11 @@ const styles = StyleSheet.create({
     paddingTop: 6,
   },
   icon: {
-    fontSize: 22,
-    opacity: 0.5,
-  },
-  iconFocused: {
-    opacity: 1,
+    width: 28,
+    height: 28,
   },
   label: {
     fontSize: typography.xs,
+    fontFamily: fontFamily.regular,
   },
 });
