@@ -42,11 +42,16 @@ export default function HomeScreen() {
   useEffect(() => { fetchToday(); }, [fetchToday]);
 
   // 앱이 백그라운드에서 포그라운드로 돌아올 때 날짜 바뀌었으면 새로고침
-  const lastDateRef = useRef(new Date().toLocaleDateString());
+  // toLocaleDateString 대신 KST 기준 YYYY-MM-DD 포맷 사용 (백엔드와 동일 기준)
+  const getTodayKST = useCallback(
+    () => new Date(Date.now() + 9 * 60 * 60 * 1000).toISOString().slice(0, 10),
+    []
+  );
+  const lastDateRef = useRef(getTodayKST());
   useEffect(() => {
     const sub = AppState.addEventListener('change', state => {
       if (state === 'active') {
-        const today = new Date().toLocaleDateString();
+        const today = getTodayKST();
         if (today !== lastDateRef.current) {
           lastDateRef.current = today;
           fetchToday();
@@ -54,7 +59,7 @@ export default function HomeScreen() {
       }
     });
     return () => sub.remove();
-  }, [fetchToday]);
+  }, [fetchToday, getTodayKST]);
 
   const onRefresh = useCallback(async () => {
     setRefreshing(true);

@@ -1,6 +1,8 @@
 import * as Notifications from 'expo-notifications';
 import { Platform } from 'react-native';
 
+const CHANNEL_ID = 'default';
+
 Notifications.setNotificationHandler({
   handleNotification: async () => ({
     shouldShowAlert: true,
@@ -12,7 +14,7 @@ Notifications.setNotificationHandler({
 export async function requestNotificationPermission() {
   // Android 알림 채널 설정 (백그라운드/잠금화면 알림에 필수)
   if (Platform.OS === 'android') {
-    await Notifications.setNotificationChannelAsync('default', {
+    await Notifications.setNotificationChannelAsync(CHANNEL_ID, {
       name: '나날이 알림',
       importance: Notifications.AndroidImportance.HIGH,
       vibrationPattern: [0, 250, 250, 250],
@@ -37,6 +39,8 @@ export async function scheduleHabitNotifications(habit) {
     ? String(repeat_days).split(',').map(Number)
     : null; // null = 매일
 
+  // 모든 알림을 한 번에 병렬 스케줄 (leads * days 만큼 직렬 대기 방지)
+  const tasks = [];
   for (const lead of leads) {
     const totalMin = h * 60 + m - lead;
     const notifHour = Math.floor(((totalMin % 1440) + 1440) % 1440 / 60);
@@ -46,7 +50,7 @@ export async function scheduleHabitNotifications(habit) {
     if (dowList) {
       // 주간 반복: 요일별로 각각 스케줄
       for (const dow of dowList) {
-        await Notifications.scheduleNotificationAsync({
+        tasks.push(Notifications.scheduleNotificationAsync({
           identifier: `habit-${id}-${lead}-${dow}`,
           content: { title: '나날이 🌱', body, sound: true },
           trigger: {
@@ -54,24 +58,25 @@ export async function scheduleHabitNotifications(habit) {
             weekday: dow + 1, // expo: 1=일, 2=월 ...
             hour: notifHour,
             minute: notifMin,
-            channelId: 'default',
+            channelId: CHANNEL_ID,
           },
-        });
+        }));
       }
     } else {
       // 매일 반복
-      await Notifications.scheduleNotificationAsync({
+      tasks.push(Notifications.scheduleNotificationAsync({
         identifier: `habit-${id}-${lead}`,
         content: { title: '나날이 🌱', body, sound: true },
         trigger: {
           type: Notifications.SchedulableTriggerInputTypes.DAILY,
           hour: notifHour,
           minute: notifMin,
-          channelId: 'default',
+          channelId: CHANNEL_ID,
         },
-      });
+      }));
     }
   }
+  await Promise.all(tasks);
 }
 
 export async function cancelHabitNotifications(habitId) {

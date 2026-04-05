@@ -34,8 +34,8 @@ export default function Header({ title, onBack, right }) {
 
 const styles = StyleSheet.create({
   container: {
-    paddingTop: Platform.OS === 'android' ? StatusBar.currentHeight : 0,
-    height: 56 + (Platform.OS === 'android' ? StatusBar.currentHeight : 0),
+    paddingTop: Platform.OS === 'android' ? (StatusBar.currentHeight ?? 0) : 0,
+    height: 56 + (Platform.OS === 'android' ? (StatusBar.currentHeight ?? 0) : 0),
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',

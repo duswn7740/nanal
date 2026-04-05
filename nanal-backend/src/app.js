@@ -6,6 +6,8 @@ const authRouter = require('./routes/auth');
 const challengesRouter = require('./routes/challenges');
 const logsRouter = require('./routes/logs');
 const charactersRouter = require('./routes/characters');
+const boxRouter = require('./routes/box');
+const shopRouter = require('./routes/shop');
 const { scheduleMidnightCron } = require('./cron/midnight');
 
 const app = express();
@@ -18,6 +20,8 @@ app.use('/api/auth', authRouter);
 app.use('/api/challenges', challengesRouter);
 app.use('/api/logs', logsRouter);
 app.use('/api/characters', charactersRouter);
+app.use('/api/box', boxRouter);
+app.use('/api/shop', shopRouter);
 
 // 자정 크론 등록
 scheduleMidnightCron();

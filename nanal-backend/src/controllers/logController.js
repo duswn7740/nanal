@@ -3,9 +3,10 @@ const { getTodayKST, getYesterdayKST, normalizeDateStr } = require('../utils/dat
 const { getLevelFromExp } = require('../utils/xp');
 
 // 체크인 후 활성 캐릭터에 XP 지급 + 레벨업 처리
+// is_purchased = TRUE인 메인 캐릭터만 XP 증가
 async function grantExp(userId, amount) {
   const [[uc]] = await pool.query(
-    'SELECT id, exp FROM user_characters WHERE user_id = ? AND is_active = 1 LIMIT 1',
+    'SELECT id, exp FROM user_characters WHERE user_id = ? AND is_active = 1 AND is_purchased = TRUE LIMIT 1',
     [userId]
   );
   if (!uc) return;
@@ -49,14 +50,15 @@ async function checkUnlocks(userId) {
     { id: 4, condition: totalDays >= 50 },   // 토끼: 50일 달성
   ];
 
-  for (const { id, condition } of unlocks) {
-    if (condition && !ownedIds.has(id)) {
-      await pool.query(
+  // 해금 조건 만족 + 미보유 캐릭터만 병렬 인서트
+  await Promise.all(
+    unlocks
+      .filter(({ id, condition }) => condition && !ownedIds.has(id))
+      .map(({ id }) => pool.query(
         'INSERT INTO user_characters (user_id, character_id, level, exp, is_active) VALUES (?, ?, 1, 0, 0)',
         [userId, id]
-      );
-    }
-  }
+      ))
+  );
 }
 
 // ─────────────────────────────────────────
