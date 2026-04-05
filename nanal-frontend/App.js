@@ -3,6 +3,7 @@ import { View, ActivityIndicator, StyleSheet } from 'react-native';
 import { NavigationContainer } from '@react-navigation/native';
 import { StatusBar } from 'expo-status-bar';
 import { GestureHandlerRootView } from 'react-native-gesture-handler';
+import { SafeAreaProvider } from 'react-native-safe-area-context';
 import { useFonts } from 'expo-font';
 import { useEffect } from 'react';
 import { requestNotificationPermission } from './src/utils/notifications';
@@ -48,12 +49,14 @@ export default function App() {
   return (
     // GestureHandlerRootView: @react-navigation/stack 에서 필요
     <GestureHandlerRootView style={styles.root}>
+      <SafeAreaProvider>
       <AuthProvider>
         <NavigationContainer>
           <StatusBar style="dark" backgroundColor="transparent" translucent />
           <RootNavigator />
         </NavigationContainer>
       </AuthProvider>
+      </SafeAreaProvider>
     </GestureHandlerRootView>
   );
 }

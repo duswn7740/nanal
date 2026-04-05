@@ -1,6 +1,7 @@
 import React from 'react';
 import { createBottomTabNavigator } from '@react-navigation/bottom-tabs';
 import { Image, Text, StyleSheet } from 'react-native';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { colors, typography, fontFamily } from '../theme';
 
 import HomeScreen from '../screens/HomeScreen';
@@ -12,33 +13,34 @@ const Tab = createBottomTabNavigator();
 
 const TABS = [
   {
-    name: 'Home', component: HomeScreen, label: '홈',
+    name: 'Home', component: HomeScreen, 
     active: require('../../assets/icons/home_active.png'),
     inactive: require('../../assets/icons/home_unactive.png'),
   },
   {
-    name: 'Calendar', component: CalendarScreen, label: '달력',
+    name: 'Calendar', component: CalendarScreen,
     active: require('../../assets/icons/calendar_active.png'),
     inactive: require('../../assets/icons/calendar_unactive.png'),
   },
   {
-    name: 'Character', component: CharacterScreen, label: '캐릭터',
+    name: 'Character', component: CharacterScreen,
     active: require('../../assets/icons/character_active.png'),
     inactive: require('../../assets/icons/character_unactive.png'),
   },
   {
-    name: 'Settings', component: SettingsScreen, label: '설정',
+    name: 'Settings', component: SettingsScreen,
     active: require('../../assets/icons/settings_active.png'),
     inactive: require('../../assets/icons/settings_unactive.png'),
   },
 ];
 
 export default function TabNavigator() {
+  const insets = useSafeAreaInsets();
   return (
     <Tab.Navigator
       screenOptions={({ route }) => ({
         headerShown: false,
-        tabBarStyle: styles.tabBar,
+        tabBarStyle: [styles.tabBar, { paddingBottom: insets.bottom + 6, height: 56 + insets.bottom }],
         tabBarActiveTintColor: colors.lavenderDark,
         tabBarInactiveTintColor: colors.textSub,
         tabBarLabel: ({ focused, color }) => {
@@ -71,8 +73,6 @@ const styles = StyleSheet.create({
     backgroundColor: colors.surface,
     borderTopColor: colors.border,
     borderTopWidth: 1,
-    height: 80,
-    paddingBottom: 24,
     paddingTop: 6,
   },
   icon: {

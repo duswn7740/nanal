@@ -100,6 +100,7 @@ export default function AddHabitModal({ visible, onClose, onAdded }) {
           contentContainerStyle={styles.container}
           keyboardShouldPersistTaps="handled"
           showsVerticalScrollIndicator={false}
+          nestedScrollEnabled
         >
           {/* 제목 */}
           <Input

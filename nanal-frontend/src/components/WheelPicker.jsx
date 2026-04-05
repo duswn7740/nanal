@@ -38,6 +38,8 @@ export default function WheelPicker({ items, selectedIndex, onSelect, width = 80
         onMomentumScrollEnd={handleMomentumEnd}
         contentContainerStyle={{ paddingVertical: ITEM_HEIGHT }}
         onLayout={() => scrollToIndex(selectedIndex)}
+        nestedScrollEnabled
+        scrollEventThrottle={16}
       >
         {items.map((item, idx) => (
           <View key={idx} style={styles.item}>

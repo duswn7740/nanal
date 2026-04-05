@@ -215,7 +215,7 @@ const styles = StyleSheet.create({
 
   fab: {
     position: 'absolute',
-    bottom: 80,
+    bottom: 20,
     right: spacing.lg,
     elevation: 6,
   },
