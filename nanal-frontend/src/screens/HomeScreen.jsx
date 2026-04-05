@@ -13,26 +13,36 @@ import EmptyState from '../components/EmptyState';
 import api from '../api';
 import { getCharacterImage } from '../constants/characterImages';
 import AddHabitModal from './AddHabitModal';
+import GiftBoxModal from './GiftBoxModal';
 import { rescheduleAllHabits, scheduleHabitNotifications } from '../utils/notifications';
 
 export default function HomeScreen() {
   const [habits, setHabits] = useState([]);
   const [character, setCharacter] = useState(null);
+  const [coins, setCoins] = useState(0);
   const [refreshing, setRefreshing] = useState(false);
   const [error, setError] = useState(false);
   const [modalVisible, setModalVisible] = useState(false);
+  const [giftBoxVisible, setGiftBoxVisible] = useState(false);
 
   const fetchToday = useCallback(async () => {
     setError(false);
     try {
-      const [logsRes, charRes, challengeRes] = await Promise.all([
+      const [logsRes, charRes, challengeRes, boxRes] = await Promise.all([
         api.get('/logs/today'),
         api.get('/characters/active'),
         api.get('/challenges'),
+        api.get('/box/status'),
       ]);
       setHabits(logsRes.data.logs);
       setCharacter(charRes.data.character);
+      setCoins(boxRes.data.coins);
       rescheduleAllHabits(challengeRes.data.challenges);
+
+      // 오늘 아직 상자를 안 열었으면 모달 자동 오픈
+      if (!boxRes.data.opened) {
+        setGiftBoxVisible(true);
+      }
     } catch {
       setError(true);
     }
@@ -172,6 +182,12 @@ export default function HomeScreen() {
           scheduleHabitNotifications(newHabit);
           setModalVisible(false);
         }}
+      />
+
+      <GiftBoxModal
+        visible={giftBoxVisible}
+        onClose={() => setGiftBoxVisible(false)}
+        onCoinsUpdated={(newCoins) => setCoins(newCoins)}
       />
     </SafeAreaView>
   );
