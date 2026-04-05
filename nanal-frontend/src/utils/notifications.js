@@ -1,4 +1,5 @@
 import * as Notifications from 'expo-notifications';
+import { Platform } from 'react-native';
 
 Notifications.setNotificationHandler({
   handleNotification: async () => ({
@@ -9,6 +10,16 @@ Notifications.setNotificationHandler({
 });
 
 export async function requestNotificationPermission() {
+  // Android 알림 채널 설정 (백그라운드/잠금화면 알림에 필수)
+  if (Platform.OS === 'android') {
+    await Notifications.setNotificationChannelAsync('default', {
+      name: '나날이 알림',
+      importance: Notifications.AndroidImportance.HIGH,
+      vibrationPattern: [0, 250, 250, 250],
+      lightColor: '#A78BFA',
+      sound: true,
+    });
+  }
   const { status } = await Notifications.requestPermissionsAsync();
   return status === 'granted';
 }
@@ -37,12 +48,13 @@ export async function scheduleHabitNotifications(habit) {
       for (const dow of dowList) {
         await Notifications.scheduleNotificationAsync({
           identifier: `habit-${id}-${lead}-${dow}`,
-          content: { title: '나날이 🌱', body },
+          content: { title: '나날이 🌱', body, sound: true },
           trigger: {
             type: Notifications.SchedulableTriggerInputTypes.WEEKLY,
             weekday: dow + 1, // expo: 1=일, 2=월 ...
             hour: notifHour,
             minute: notifMin,
+            channelId: 'default',
           },
         });
       }
@@ -50,11 +62,12 @@ export async function scheduleHabitNotifications(habit) {
       // 매일 반복
       await Notifications.scheduleNotificationAsync({
         identifier: `habit-${id}-${lead}`,
-        content: { title: '나날이 🌱', body },
+        content: { title: '나날이 🌱', body, sound: true },
         trigger: {
           type: Notifications.SchedulableTriggerInputTypes.DAILY,
           hour: notifHour,
           minute: notifMin,
+          channelId: 'default',
         },
       });
     }

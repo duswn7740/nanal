@@ -1,7 +1,7 @@
-import React, { useState, useCallback, useEffect, useMemo } from 'react';
+import React, { useState, useCallback, useEffect, useMemo, useRef } from 'react';
 import {
   View, Text, ScrollView, TouchableOpacity,
-  StyleSheet, SafeAreaView, Image, RefreshControl,
+  StyleSheet, SafeAreaView, Image, RefreshControl, AppState,
 } from 'react-native';
 import { colors, typography, fontFamily, spacing, radius } from '../theme';
 import Header from '../components/Header';
@@ -40,6 +40,21 @@ export default function HomeScreen() {
 
   // 최초 1회 로드
   useEffect(() => { fetchToday(); }, [fetchToday]);
+
+  // 앱이 백그라운드에서 포그라운드로 돌아올 때 날짜 바뀌었으면 새로고침
+  const lastDateRef = useRef(new Date().toLocaleDateString());
+  useEffect(() => {
+    const sub = AppState.addEventListener('change', state => {
+      if (state === 'active') {
+        const today = new Date().toLocaleDateString();
+        if (today !== lastDateRef.current) {
+          lastDateRef.current = today;
+          fetchToday();
+        }
+      }
+    });
+    return () => sub.remove();
+  }, [fetchToday]);
 
   const onRefresh = useCallback(async () => {
     setRefreshing(true);
