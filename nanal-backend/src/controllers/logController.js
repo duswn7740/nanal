@@ -188,6 +188,7 @@ async function checkin(req, res) {
       message: '체크인 성공!',
       log: { challenge_id, log_date: today, is_done: true, done_at: doneAt, memo: memo || null },
       streak: { current: newStreak, best: Math.max(challenge.best_streak, newStreak) },
+      xpGain: alreadyGranted ? 0 : xpGain,
     });
   } catch (err) {
     console.error('checkin error:', err);

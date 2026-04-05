@@ -1,7 +1,7 @@
 import React, { useState, useCallback, useEffect, useMemo, useRef } from 'react';
 import {
   View, Text, ScrollView, TouchableOpacity,
-  StyleSheet, SafeAreaView, Image, RefreshControl, AppState,
+  StyleSheet, SafeAreaView, Image, RefreshControl, AppState, Animated,
 } from 'react-native';
 import { colors, typography, fontFamily, spacing, radius } from '../theme';
 import Header from '../components/Header';
@@ -24,6 +24,9 @@ export default function HomeScreen() {
   const [error, setError] = useState(false);
   const [modalVisible, setModalVisible] = useState(false);
   const [giftBoxVisible, setGiftBoxVisible] = useState(false);
+  const [xpPopup, setXpPopup] = useState(null); // 표시할 XP 텍스트 (예: '+10 XP')
+  const xpAnim = useRef(new Animated.ValueXY({ x: 0, y: 0 })).current;
+  const xpOpacity = useRef(new Animated.Value(0)).current;
 
   const fetchToday = useCallback(async () => {
     setError(false);
@@ -80,6 +83,26 @@ export default function HomeScreen() {
     }
   }, [fetchToday]);
 
+  // XP 획득 시 캐릭터 위에 팝업 텍스트가 올라가며 사라지는 애니메이션
+  const showXpPopup = useCallback((xp) => {
+    if (!xp || xp <= 0) return;
+    setXpPopup(`+${xp} XP`);
+    xpAnim.setValue({ x: 0, y: 0 });
+    xpOpacity.setValue(1);
+    Animated.parallel([
+      Animated.timing(xpAnim, {
+        toValue: { x: 0, y: -60 },
+        duration: 900,
+        useNativeDriver: true,
+      }),
+      Animated.timing(xpOpacity, {
+        toValue: 0,
+        duration: 900,
+        useNativeDriver: true,
+      }),
+    ]).start(() => setXpPopup(null));
+  }, [xpAnim, xpOpacity]);
+
   const handleCheck = useCallback(async (challengeId, isDone) => {
     try {
       if (isDone) {
@@ -88,15 +111,16 @@ export default function HomeScreen() {
           prev.map(h => h.challenge_id === challengeId ? { ...h, is_done: false } : h)
         );
       } else {
-        await api.post('/logs/checkin', { challenge_id: challengeId });
+        const { data } = await api.post('/logs/checkin', { challenge_id: challengeId });
         setHabits(prev =>
           prev.map(h => h.challenge_id === challengeId ? { ...h, is_done: true } : h)
         );
+        showXpPopup(data.xpGain);
       }
     } catch (err) {
       if (err.response?.status !== 409) alert('요청에 실패했어요. 다시 시도해줘요.');
     }
-  }, []);
+  }, [showXpPopup]);
 
   // 미완료(시간없는것→시간있는것) → 완료 순 정렬
   const sorted = useMemo(() => [...habits].sort((a, b) => {
@@ -136,6 +160,15 @@ export default function HomeScreen() {
           }
         >
           <View style={styles.characterSection}>
+            {/* XP 획득 팝업 애니메이션 */}
+            {xpPopup && (
+              <Animated.Text style={[
+                styles.xpPopup,
+                { opacity: xpOpacity, transform: xpAnim.getTranslateTransform() },
+              ]}>
+                {xpPopup}
+              </Animated.Text>
+            )}
             <Avatar
               size="lg"
               image={character ? getCharacterImage(character.name, character.level) : null}
@@ -219,6 +252,13 @@ const styles = StyleSheet.create({
     paddingVertical: spacing.lg,
     paddingHorizontal: spacing.xl,
     gap: spacing.md,
+  },
+  xpPopup: {
+    position: 'absolute',
+    fontSize: typography.lg,
+    fontFamily: fontFamily.bold,
+    color: colors.lavenderDark,
+    zIndex: 10,
   },
   expWrapper: { width: '100%' },
 
