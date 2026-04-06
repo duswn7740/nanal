@@ -16,10 +16,13 @@ export async function requestNotificationPermission() {
   if (Platform.OS === 'android') {
     await Notifications.setNotificationChannelAsync(CHANNEL_ID, {
       name: '나날이 알림',
-      importance: Notifications.AndroidImportance.HIGH,
+      importance: Notifications.AndroidImportance.MAX,
       vibrationPattern: [0, 250, 250, 250],
       lightColor: '#A78BFA',
       sound: true,
+      enableLights: true,
+      enableVibrate: true,
+      showBadge: true,
     });
   }
   const { status } = await Notifications.requestPermissionsAsync();
