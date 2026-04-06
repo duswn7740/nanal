@@ -1,6 +1,6 @@
 import React, { useState, useCallback } from 'react';
 import {
-  View, Text, ScrollView, Image, TouchableOpacity, Modal,
+  View, Text, ScrollView, TouchableOpacity, Modal,
   SafeAreaView, StyleSheet, ActivityIndicator, Alert,
 } from 'react-native';
 import { useFocusEffect } from '@react-navigation/native';
@@ -29,19 +29,31 @@ const XP_INFO = [
 
 export default function CharacterScreen() {
   const [active, setActive] = useState(null);
-  const [characters, setCharacters] = useState([]);
+  const [shopChars, setShopChars] = useState([]);   // 전체 캐릭터 (상태 포함)
+  const [ownedMap, setOwnedMap] = useState({});      // character_id → { level, exp, uc_id }
+  const [coins, setCoins] = useState(0);
   const [loading, setLoading] = useState(false);
+  const [buying, setBuying] = useState(null);        // 구매 중인 character_id
   const [xpModalVisible, setXpModalVisible] = useState(false);
 
   const fetchData = useCallback(async () => {
     setLoading(true);
     try {
-      const [activeRes, listRes] = await Promise.all([
-        api.get('/characters/active'),
-        api.get('/characters'),
+      const [activeRes, shopRes, ownedRes, boxRes] = await Promise.all([
+        api.get('/characters/active').catch(() => ({ data: { character: null } })),
+        api.get('/shop/characters').catch(() => ({ data: { characters: [] } })),
+        api.get('/characters').catch(() => ({ data: { characters: [] } })),
+        api.get('/box/status').catch(() => ({ data: { coins: 0 } })),
       ]);
       setActive(activeRes.data.character);
-      setCharacters(listRes.data.characters);
+      setShopChars(shopRes.data.characters ?? []);
+      setCoins(boxRes.data.coins ?? 0);
+
+      const map = {};
+      for (const c of (ownedRes.data.characters ?? [])) {
+        map[c.character_id] = { level: c.level, exp: c.exp, uc_id: c.id, is_active: c.is_active };
+      }
+      setOwnedMap(map);
     } catch {
       // 무시
     } finally {
@@ -51,7 +63,7 @@ export default function CharacterScreen() {
 
   useFocusEffect(useCallback(() => { fetchData(); }, [fetchData]));
 
-  const handleSetActive = async (ucId, name) => {
+  const handleSetActive = (ucId, name) => {
     if (active?.id === ucId) return;
     Alert.alert('메인 캐릭터 변경', `${name}을(를) 메인 캐릭터로 설정할까요?`, [
       { text: '취소', style: 'cancel' },
@@ -68,6 +80,34 @@ export default function CharacterScreen() {
     ]);
   };
 
+  const handleBuy = (char) => {
+    if (coins < char.price) {
+      Alert.alert('코인 부족', `코인이 부족해요.\n필요: ${char.price}개, 보유: ${coins}개`);
+      return;
+    }
+    Alert.alert(
+      '캐릭터 구매',
+      `${char.name}을(를) ${char.price}코인으로 구매할까요?`,
+      [
+        { text: '취소', style: 'cancel' },
+        {
+          text: '구매', onPress: async () => {
+            setBuying(char.id);
+            try {
+              const { data } = await api.post(`/shop/buy/${char.id}`);
+              setCoins(data.coins);
+              await fetchData();
+            } catch (err) {
+              Alert.alert(err.response?.data?.message ?? '구매에 실패했어요.');
+            } finally {
+              setBuying(null);
+            }
+          },
+        },
+      ]
+    );
+  };
+
   if (loading) {
     return (
       <SafeAreaView style={styles.safeArea}>
@@ -77,9 +117,7 @@ export default function CharacterScreen() {
     );
   }
 
-  const expProgress = active
-    ? getLevelProgress(active.exp, active.level)
-    : 0;
+  const expProgress = active ? getLevelProgress(active.exp, active.level) : 0;
   const expLabel = active?.level >= MAX_LEVEL
     ? '최종 진화 완료!'
     : active
@@ -88,7 +126,15 @@ export default function CharacterScreen() {
 
   return (
     <SafeAreaView style={styles.safeArea}>
-      <Header title="캐릭터" />
+      <Header
+        title="캐릭터"
+        right={
+          <View style={styles.coinBadge}>
+            <Text style={styles.coinC}>C</Text>
+            <Text style={styles.coinNum}>{coins}</Text>
+          </View>
+        }
+      />
       <ScrollView contentContainerStyle={styles.scrollContent} showsVerticalScrollIndicator={false}>
 
         {/* 메인 캐릭터 */}
@@ -110,23 +156,69 @@ export default function CharacterScreen() {
           </View>
         )}
 
-        {/* 보유 캐릭터 목록 */}
-        <Text style={styles.sectionTitle}>보유 캐릭터</Text>
+        {/* 전체 캐릭터 목록 */}
+        <Text style={styles.sectionTitle}>캐릭터 도감</Text>
         <View style={styles.grid}>
-          {characters.map(c => {
-            const isActive = c.id === active?.id;
-            const image = getCharacterImage(c.name, c.level);
+          {shopChars.map(char => {
+            const owned = ownedMap[char.id];
+            const isActive = active && owned?.uc_id === active.id;
+            // is_active인 캐릭터는 최초 지급이므로 purchased 취급
+            const isPurchased = !!char.is_purchased || !!owned?.is_active;
+            const isUnlocked = !!char.is_unlocked;
+            const level = owned?.level ?? 1;
+            const image = getCharacterImage(char.name, level);
+
+            if (!isUnlocked) {
+              // 잠금 상태
+              return (
+                <View key={char.id} style={[styles.charCard, styles.charCardLocked]}>
+                  <View style={styles.lockedImageWrapper}>
+                    <Avatar size="md" image={image} style={styles.lockedAvatar} />
+                    <Text style={styles.lockIcon}>🔒</Text>
+                  </View>
+                  <Text style={styles.charName}>{char.name}</Text>
+                  <Text style={styles.unlockCondition}>{char.unlock_condition}</Text>
+                </View>
+              );
+            }
+
+            if (!isPurchased) {
+              // 해금됐지만 미구매
+              return (
+                <View key={char.id} style={[styles.charCard, styles.charCardUnlocked]}>
+                  <Avatar size="md" image={image} />
+                  <Text style={styles.charName}>{char.name}</Text>
+                  <TouchableOpacity
+                    style={styles.buyButton}
+                    onPress={() => handleBuy(char)}
+                    disabled={buying === char.id}
+                    activeOpacity={0.8}
+                  >
+                    {buying === char.id
+                      ? <ActivityIndicator size="small" color={colors.surface} />
+                      : <Text style={styles.buyButtonText}>🪙 {char.price}</Text>
+                    }
+                  </TouchableOpacity>
+                </View>
+              );
+            }
+
+            // 구매 완료 (메인 또는 보유)
             return (
               <TouchableOpacity
-                key={c.id}
+                key={char.id}
                 style={[styles.charCard, isActive && styles.charCardActive]}
-                onPress={() => handleSetActive(c.id, c.name)}
+                onPress={() => owned && handleSetActive(owned.uc_id, char.name)}
                 activeOpacity={0.8}
               >
                 <Avatar size="md" image={image} />
-                <Text style={styles.charName}>{c.name}</Text>
-                <Text style={styles.charLevel}>Lv.{c.level}</Text>
-                {isActive && <View style={styles.activeDot} />}
+                <Text style={styles.charName}>{char.name}</Text>
+                <Text style={styles.charLevel}>Lv.{level}</Text>
+                <View style={[styles.ownedBadge, isActive && styles.activeBadge]}>
+                  <Text style={[styles.ownedBadgeText, isActive && { color: colors.surface }]}>
+                    {isActive ? '메인' : '보유중'}
+                  </Text>
+                </View>
               </TouchableOpacity>
             );
           })}
@@ -134,6 +226,7 @@ export default function CharacterScreen() {
 
       </ScrollView>
 
+      {/* XP 안내 모달 */}
       <Modal visible={xpModalVisible} transparent animationType="fade" onRequestClose={() => setXpModalVisible(false)}>
         <TouchableOpacity style={styles.modalOverlay} activeOpacity={1} onPress={() => setXpModalVisible(false)}>
           <View style={styles.modalCard}>
@@ -156,133 +249,96 @@ const styles = StyleSheet.create({
   loader: { marginTop: spacing.xxl },
   scrollContent: { padding: spacing.md, gap: spacing.lg, paddingBottom: spacing.xxl },
 
-  activeCard: {
+  coinBadge: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: spacing.md,
-    backgroundColor: colors.surface,
-    borderRadius: radius.lg,
-    borderWidth: 1.5,
-    borderColor: colors.border,
-    padding: spacing.md,
+    backgroundColor: colors.roseLight,
+    borderRadius: 20,
+    paddingHorizontal: spacing.md,
+    paddingVertical: 5,
+    gap: 3,
+  },
+  coinC: { fontSize: typography.sm, fontFamily: fontFamily.bold, color: colors.roseDark },
+  coinNum: { fontSize: typography.sm, fontFamily: fontFamily.regular, color: colors.roseDark },
+
+  activeCard: {
+    flexDirection: 'row', alignItems: 'center', gap: spacing.md,
+    backgroundColor: colors.surface, borderRadius: radius.lg,
+    borderWidth: 1.5, borderColor: colors.border, padding: spacing.md,
   },
   activeInfo: { flex: 1, gap: spacing.sm },
   activeNameRow: { flexDirection: 'row', alignItems: 'center', gap: spacing.sm },
-  expBarRow: { flexDirection: 'row', alignItems: 'center', gap: spacing.sm },
   infoBtn: {
-    position: 'absolute',
-    top: spacing.sm,
-    right: spacing.sm,
-    width: 20,
-    height: 20,
-    borderRadius: radius.full,
-    borderWidth: 1.5,
-    borderColor: colors.textSub,
-    alignItems: 'center',
-    justifyContent: 'center',
-    zIndex: 1,
+    position: 'absolute', top: spacing.sm, right: spacing.sm,
+    width: 20, height: 20, borderRadius: radius.full,
+    borderWidth: 1.5, borderColor: colors.textSub,
+    alignItems: 'center', justifyContent: 'center', zIndex: 1,
   },
-  infoBtnText: {
-    fontSize: typography.xs,
-    fontFamily: fontFamily.bold,
-    color: colors.textSub,
-  },
-  activeName: {
-    fontSize: typography.lg,
-    fontFamily: fontFamily.bold,
-    color: colors.textMain,
-  },
+  infoBtnText: { fontSize: typography.xs, fontFamily: fontFamily.bold, color: colors.textSub },
+  activeName: { fontSize: typography.lg, fontFamily: fontFamily.bold, color: colors.textMain },
   levelBadge: {
-    backgroundColor: colors.lavenderLight,
-    borderRadius: radius.full,
-    paddingHorizontal: spacing.sm,
-    paddingVertical: 2,
+    backgroundColor: colors.lavenderLight, borderRadius: radius.full,
+    paddingHorizontal: spacing.sm, paddingVertical: 2,
   },
-  levelBadgeText: {
-    fontSize: typography.xs,
-    fontFamily: fontFamily.bold,
-    color: colors.lavenderDark,
-  },
+  levelBadgeText: { fontSize: typography.xs, fontFamily: fontFamily.bold, color: colors.lavenderDark },
 
   sectionTitle: {
-    fontSize: typography.sm,
-    fontFamily: fontFamily.bold,
-    color: colors.textSub,
+    fontSize: typography.sm, fontFamily: fontFamily.bold, color: colors.textSub,
     paddingHorizontal: spacing.xs,
   },
 
-  grid: {
-    flexDirection: 'row',
-    flexWrap: 'wrap',
-    gap: spacing.sm,
-  },
+  grid: { flexDirection: 'row', flexWrap: 'wrap', gap: spacing.sm },
   charCard: {
-    width: '30%',
-    alignItems: 'center',
-    gap: spacing.xs,
-    backgroundColor: colors.surface,
-    borderRadius: radius.lg,
-    borderWidth: 1.5,
-    borderColor: colors.border,
-    padding: spacing.sm,
+    width: '30%', alignItems: 'center', gap: spacing.xs,
+    backgroundColor: colors.surface, borderRadius: radius.lg,
+    borderWidth: 1.5, borderColor: colors.border, padding: spacing.sm,
   },
-  charCardActive: {
-    borderColor: colors.lavender,
-    backgroundColor: colors.lavenderLight,
-  },
-  charName: {
-    fontSize: typography.sm,
-    fontFamily: fontFamily.bold,
-    color: colors.textMain,
-  },
-  charLevel: {
-    fontSize: typography.xs,
-    fontFamily: fontFamily.regular,
-    color: colors.textSub,
-  },
-  activeDot: {
-    width: 8,
-    height: 8,
-    borderRadius: radius.full,
-    backgroundColor: colors.lavenderDark,
+  charCardActive: { borderColor: colors.lavender, backgroundColor: colors.lavenderLight },
+  charCardLocked: { opacity: 0.55 },
+  charCardUnlocked: { borderColor: colors.rose, borderStyle: 'dashed' },
+
+  lockedImageWrapper: { position: 'relative', alignItems: 'center' },
+  lockIcon: { position: 'absolute', bottom: -4, right: -4, fontSize: 14 },
+
+  charName: { fontSize: typography.sm, fontFamily: fontFamily.bold, color: colors.textMain, textAlign: 'center' },
+  charLevel: { fontSize: typography.xs, fontFamily: fontFamily.regular, color: colors.textSub },
+  unlockCondition: {
+    fontSize: typography.xs, fontFamily: fontFamily.regular,
+    color: colors.textSub, textAlign: 'center',
   },
 
+  buyButton: {
+    backgroundColor: colors.lavenderDark, borderRadius: radius.full,
+    paddingHorizontal: spacing.sm, paddingVertical: 4, marginTop: 2,
+  },
+  buyButtonText: { fontSize: typography.xs, fontFamily: fontFamily.bold, color: colors.surface },
+
+  ownedBadge: {
+    backgroundColor: colors.surface, borderRadius: radius.full,
+    borderWidth: 1, borderColor: colors.border,
+    paddingHorizontal: spacing.sm, paddingVertical: 2,
+  },
+  activeBadge: {
+    backgroundColor: colors.lavenderDark, borderColor: colors.lavenderDark,
+  },
+  ownedBadgeText: { fontSize: typography.xs, fontFamily: fontFamily.bold, color: colors.textSub },
+
   modalOverlay: {
-    flex: 1,
-    backgroundColor: 'rgba(0,0,0,0.3)',
-    justifyContent: 'center',
-    paddingHorizontal: spacing.xl,
+    flex: 1, backgroundColor: 'rgba(0,0,0,0.3)',
+    justifyContent: 'center', paddingHorizontal: spacing.xl,
   },
   modalCard: {
-    backgroundColor: colors.surface,
-    borderRadius: radius.lg,
-    padding: spacing.lg,
-    gap: spacing.sm,
+    backgroundColor: colors.surface, borderRadius: radius.lg, padding: spacing.lg, gap: spacing.sm,
   },
   modalTitle: {
-    fontSize: typography.md,
-    fontFamily: fontFamily.bold,
-    color: colors.textMain,
-    textAlign: 'center',
-    marginBottom: spacing.xs,
+    fontSize: typography.md, fontFamily: fontFamily.bold,
+    color: colors.textMain, textAlign: 'center', marginBottom: spacing.xs,
   },
   xpRow: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    paddingHorizontal: spacing.md,
-    paddingVertical: spacing.md,
-    borderBottomWidth: 1,
-    borderBottomColor: colors.border,
+    flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center',
+    paddingHorizontal: spacing.md, paddingVertical: spacing.md,
+    borderBottomWidth: 1, borderBottomColor: colors.border,
   },
-  xpLabel: {
-    fontSize: typography.md,
-    fontFamily: fontFamily.regular,
-    color: colors.textMain,
-  },
-  xpValue: {
-    fontSize: typography.md,
-    fontFamily: fontFamily.bold,
-    color: colors.lavenderDark,
-  },
+  xpLabel: { fontSize: typography.md, fontFamily: fontFamily.regular, color: colors.textMain },
+  xpValue: { fontSize: typography.md, fontFamily: fontFamily.bold, color: colors.lavenderDark },
 });

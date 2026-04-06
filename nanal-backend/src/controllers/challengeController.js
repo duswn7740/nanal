@@ -193,18 +193,28 @@ async function reorderChallenges(req, res) {
   }
 }
 
-// DELETE /api/challenges/:id
+// DELETE /api/challenges/:id?mode=today|all
+// today: 오늘부터 비활성화 (과거 기록 유지)
+// all: 과거 로그 삭제 + 비활성화
 async function deleteChallenge(req, res) {
   const userId = req.user.userId;
   const challengeId = req.params.id;
+  const mode = req.query.mode ?? 'today'; // 기본값: 오늘부터
 
   try {
     if (!(await verifyOwnership(challengeId, userId))) {
       return res.status(404).json({ message: '챌린지를 찾을 수 없습니다.' });
     }
 
-    await pool.query('DELETE FROM challenges WHERE id = ?', [challengeId]);
-    return res.json({ message: '챌린지가 삭제되었습니다.' });
+    if (mode === 'all') {
+      // 과거 로그 전체 삭제 후 비활성화
+      await pool.query('DELETE FROM logs WHERE challenge_id = ?', [challengeId]);
+    }
+
+    // 오늘부터 비활성화 (두 모드 공통)
+    await pool.query('UPDATE challenges SET is_active = FALSE WHERE id = ?', [challengeId]);
+
+    return res.json({ message: '습관이 삭제되었습니다.' });
   } catch (err) {
     console.error('deleteChallenge error:', err);
     return res.status(500).json({ message: '서버 오류가 발생했습니다.' });

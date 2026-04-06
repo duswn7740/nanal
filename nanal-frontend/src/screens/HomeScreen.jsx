@@ -12,9 +12,11 @@ import Card from '../components/Card';
 import EmptyState from '../components/EmptyState';
 import api from '../api';
 import { getCharacterImage } from '../constants/characterImages';
+import DraggableFlatList from 'react-native-draggable-flatlist';
 import AddHabitModal from './AddHabitModal';
+import EditHabitModal from './EditHabitModal';
 import GiftBoxModal from './GiftBoxModal';
-import { rescheduleAllHabits, scheduleHabitNotifications } from '../utils/notifications';
+import { rescheduleAllHabits, scheduleHabitNotifications, cancelHabitNotifications } from '../utils/notifications';
 
 export default function HomeScreen() {
   const [habits, setHabits] = useState([]);
@@ -24,6 +26,9 @@ export default function HomeScreen() {
   const [error, setError] = useState(false);
   const [modalVisible, setModalVisible] = useState(false);
   const [giftBoxVisible, setGiftBoxVisible] = useState(false);
+  const [editMode, setEditMode] = useState(false);         // 편집모드 on/off
+  const [editTarget, setEditTarget] = useState(null);       // 편집할 습관
+  const [editModalVisible, setEditModalVisible] = useState(false);
   const [xpPopup, setXpPopup] = useState(null); // 표시할 XP 텍스트 (예: '+10 XP')
   const xpAnim = useRef(new Animated.ValueXY({ x: 0, y: 0 })).current;
   const xpOpacity = useRef(new Animated.Value(0)).current;
@@ -103,6 +108,19 @@ export default function HomeScreen() {
     ]).start(() => setXpPopup(null));
   }, [xpAnim, xpOpacity]);
 
+  // 드래그 완료 시 순서 서버에 저장
+  const handleReorder = useCallback(async ({ data }) => {
+    const reordered = data.map((h, idx) => ({ ...h, display_order: idx }));
+    setHabits(reordered);
+    try {
+      await api.put('/challenges/reorder', {
+        orders: reordered.map(h => ({ id: h.challenge_id, display_order: h.display_order })),
+      });
+    } catch {
+      // 실패해도 로컬 상태는 유지
+    }
+  }, []);
+
   const handleCheck = useCallback(async (challengeId, isDone) => {
     try {
       if (isDone) {
@@ -135,7 +153,14 @@ export default function HomeScreen() {
 
   return (
     <SafeAreaView style={styles.safeArea}>
-      <Header title="나날 - 습관트래커" />
+      <Header
+        title="나날 - 습관트래커"
+        right={
+          <TouchableOpacity onPress={() => setEditMode(prev => !prev)} style={{ padding: spacing.xs }}>
+            <Text style={styles.editModeBtn}>{editMode ? '완료' : '⋮'}</Text>
+          </TouchableOpacity>
+        }
+      />
 
       {error ? (
         <View style={styles.center}>
@@ -145,7 +170,31 @@ export default function HomeScreen() {
             </TouchableOpacity>
           </EmptyState>
         </View>
+      ) : editMode && sorted.length > 0 ? (
+        /* 편집모드: DraggableFlatList, 캐릭터 섹션은 헤더로 */
+        <DraggableFlatList
+          data={sorted}
+          keyExtractor={item => String(item.challenge_id)}
+          onDragEnd={handleReorder}
+          style={styles.scroll}
+          contentContainerStyle={styles.habitSection}
+          ListHeaderComponent={<CharacterHeader character={character} doneCount={doneCount} habitsLength={habits.length} xpPopup={xpPopup} xpOpacity={xpOpacity} xpAnim={xpAnim} />}
+          renderItem={({ item, drag, isActive }) => (
+            <HabitItem
+              habit={item}
+              onCheck={handleCheck}
+              editMode
+              onLongPress={() => {
+                setEditTarget(item);
+                setEditModalVisible(true);
+              }}
+              drag={drag}
+              isActive={isActive}
+            />
+          )}
+        />
       ) : (
+        /* 일반모드: 단일 ScrollView */
         <ScrollView
           style={styles.scroll}
           contentContainerStyle={styles.scrollContent}
@@ -159,43 +208,22 @@ export default function HomeScreen() {
             />
           }
         >
-          <View style={styles.characterSection}>
-            {/* XP 획득 팝업 애니메이션 */}
-            {xpPopup && (
-              <Animated.Text style={[
-                styles.xpPopup,
-                { opacity: xpOpacity, transform: xpAnim.getTranslateTransform() },
-              ]}>
-                {xpPopup}
-              </Animated.Text>
-            )}
-            <Avatar
-              size="lg"
-              image={character ? getCharacterImage(character.name, character.level) : null}
-            />
-            <View style={styles.expWrapper}>
-              <ProgressBar
-                value={doneCount}
-                max={habits.length || 1}
-                label="오늘의 달성"
-                showPercent
-              />
-            </View>
-          </View>
-
-          <View style={styles.habitSection}>
-            {sorted.length === 0 ? (
+          <CharacterHeader character={character} doneCount={doneCount} habitsLength={habits.length} xpPopup={xpPopup} xpOpacity={xpOpacity} xpAnim={xpAnim} />
+          {sorted.length === 0 ? (
+            <View style={styles.habitSection}>
               <EmptyState
                 emoji="🌱"
                 message="아직 습관이 없어요"
                 sub="아래 + 버튼으로 첫 습관을 추가해봐요!"
               />
-            ) : (
-              sorted.map(habit => (
+            </View>
+          ) : (
+            <View style={styles.habitSection}>
+              {sorted.map(habit => (
                 <HabitItem key={habit.challenge_id} habit={habit} onCheck={handleCheck} />
-              ))
-            )}
-          </View>
+              ))}
+            </View>
+          )}
         </ScrollView>
       )}
 
@@ -222,21 +250,77 @@ export default function HomeScreen() {
         onClose={() => setGiftBoxVisible(false)}
         onCoinsUpdated={(newCoins) => setCoins(newCoins)}
       />
+
+      <EditHabitModal
+        visible={editModalVisible}
+        habit={editTarget}
+        onClose={() => { setEditModalVisible(false); setEditTarget(null); }}
+        onUpdated={(updated) => {
+          setHabits(prev => prev.map(h =>
+            h.challenge_id === updated.id ? { ...h, ...updated, challenge_id: updated.id } : h
+          ));
+          rescheduleAllHabits([updated]);
+        }}
+        onDeleted={(challengeId) => {
+          setHabits(prev => prev.filter(h => h.challenge_id !== challengeId));
+          cancelHabitNotifications(challengeId);
+        }}
+      />
     </SafeAreaView>
   );
 }
 
-function HabitItem({ habit, onCheck }) {
+function CharacterHeader({ character, doneCount, habitsLength, xpPopup, xpOpacity, xpAnim }) {
+  return (
+    <View style={styles.characterSection}>
+      {xpPopup && (
+        <Animated.Text style={[
+          styles.xpPopup,
+          { opacity: xpOpacity, transform: xpAnim.getTranslateTransform() },
+        ]}>
+          {xpPopup}
+        </Animated.Text>
+      )}
+      <Avatar
+        size="lg"
+        image={character ? getCharacterImage(character.name, character.level) : null}
+      />
+      <View style={styles.expWrapper}>
+        <ProgressBar
+          value={doneCount}
+          max={habitsLength || 1}
+          label="오늘의 달성"
+          showPercent
+        />
+      </View>
+    </View>
+  );
+}
+
+function HabitItem({ habit, onCheck, editMode, onLongPress, drag, isActive }) {
   const done = !!habit.is_done;
   return (
-    <Card withShadow style={done && styles.habitItemDone}>
-      <View style={styles.habitItem}>
-        <CheckButton done={done} onPress={() => onCheck(habit.challenge_id, done)} size={44} />
-        <View style={styles.habitInfo}>
-          {habit.habit_time && <Text style={styles.habitTime}>{habit.habit_time}</Text>}
-          <Text style={[styles.habitTitle, done && styles.habitTitleDone]}>{habit.title}</Text>
+    <Card withShadow style={[done && !editMode && styles.habitItemDone, isActive && styles.habitItemDragging]}>
+      <TouchableOpacity
+        onLongPress={editMode ? onLongPress : undefined}
+        delayLongPress={300}
+        activeOpacity={editMode ? 0.7 : 1}
+      >
+        <View style={styles.habitItem}>
+          {/* 편집모드가 아닐 때만 체크버튼 활성화 */}
+          <CheckButton done={done} onPress={editMode ? undefined : () => onCheck(habit.challenge_id, done)} size={44} />
+          <View style={styles.habitInfo}>
+            {habit.habit_time && <Text style={styles.habitTime}>{habit.habit_time}</Text>}
+            <Text style={[styles.habitTitle, done && !editMode && styles.habitTitleDone]}>{habit.title}</Text>
+          </View>
+          {/* 편집모드일 때 드래그 핸들(삼선) 표시 */}
+          {editMode && (
+            <TouchableOpacity onPressIn={drag} style={styles.dragHandle}>
+              <Text style={styles.dragIcon}>☰</Text>
+            </TouchableOpacity>
+          )}
         </View>
-      </View>
+      </TouchableOpacity>
     </Card>
   );
 }
@@ -247,7 +331,10 @@ const styles = StyleSheet.create({
   scroll: { flex: 1 },
   scrollContent: { paddingBottom: 100 },
 
+  editModeBtn: { fontSize: typography.xl, fontFamily: fontFamily.bold, color: colors.textMain },
+
   characterSection: {
+    alignSelf: 'stretch',
     alignItems: 'center',
     paddingVertical: spacing.lg,
     paddingHorizontal: spacing.xl,
@@ -264,6 +351,7 @@ const styles = StyleSheet.create({
 
   habitSection: {
     paddingHorizontal: spacing.md,
+    paddingBottom: 100,
     gap: spacing.sm,
   },
 
@@ -281,6 +369,20 @@ const styles = StyleSheet.create({
     elevation: 6,
   },
   fabIcon: { width: 56, height: 56, resizeMode: 'contain' },
+
+  dragHandle: {
+    padding: spacing.sm,
+    justifyContent: 'center',
+  },
+  dragIcon: {
+    fontSize: typography.lg,
+    color: colors.textSub,
+  },
+  habitItemDragging: {
+    opacity: 0.8,
+    elevation: 8,
+  },
+  draggableList: { flex: 1 },
 
   retryButton: {
     marginTop: spacing.md,

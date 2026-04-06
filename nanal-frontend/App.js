@@ -6,7 +6,7 @@ import { GestureHandlerRootView } from 'react-native-gesture-handler';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
 import { useFonts } from 'expo-font';
 import { useEffect } from 'react';
-import { requestNotificationPermission } from './src/utils/notifications';
+import { requestNotificationPermission, promptExactAlarmIfNeeded } from './src/utils/notifications';
 import { AuthProvider, useAuth } from './src/context/AuthContext';
 import TabNavigator from './src/navigation/TabNavigator';
 import AuthNavigator from './src/navigation/AuthNavigator';
@@ -30,7 +30,11 @@ function RootNavigator() {
 }
 
 export default function App() {
-  useEffect(() => { requestNotificationPermission(); }, []);
+  useEffect(() => {
+    requestNotificationPermission().then(granted => {
+      if (granted) promptExactAlarmIfNeeded();
+    });
+  }, []);
 
   const [fontsLoaded] = useFonts({
     'Galmuri11': require('./assets/fonts/Galmuri11.ttf'),

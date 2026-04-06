@@ -1,5 +1,8 @@
 import * as Notifications from 'expo-notifications';
-import { Platform } from 'react-native';
+import { Platform, Linking, Alert } from 'react-native';
+import AsyncStorage from '@react-native-async-storage/async-storage';
+
+const EXACT_ALARM_PROMPTED_KEY = 'exact_alarm_prompted';
 
 const CHANNEL_ID = 'default';
 
@@ -12,7 +15,6 @@ Notifications.setNotificationHandler({
 });
 
 export async function requestNotificationPermission() {
-  // Android 알림 채널 설정 (백그라운드/잠금화면 알림에 필수)
   if (Platform.OS === 'android') {
     await Notifications.setNotificationChannelAsync(CHANNEL_ID, {
       name: '나날이 알림',
@@ -27,6 +29,29 @@ export async function requestNotificationPermission() {
   }
   const { status } = await Notifications.requestPermissionsAsync();
   return status === 'granted';
+}
+
+// Android 12+(API 31+)에서 정확한 알람 권한 설정을 최초 1회 안내
+// 권한이 없으면 알람이 수 분씩 지연될 수 있음
+export async function promptExactAlarmIfNeeded() {
+  if (Platform.OS !== 'android' || Platform.Version < 31) return;
+
+  const already = await AsyncStorage.getItem(EXACT_ALARM_PROMPTED_KEY);
+  if (already) return;
+
+  await AsyncStorage.setItem(EXACT_ALARM_PROMPTED_KEY, 'true');
+
+  Alert.alert(
+    '정확한 알람 권한이 필요해요',
+    '습관 알림이 정확한 시간에 울리려면 "알람 및 리마인더" 권한을 허용해야 해요.\n\n설정 → 앱 → 나날 → 알람 및 리마인더 → 허용',
+    [
+      { text: '나중에', style: 'cancel' },
+      {
+        text: '설정 열기',
+        onPress: () => Linking.openSettings(),
+      },
+    ]
+  );
 }
 
 // habit_time: "07:30", alarm_lead_min: "0,5,30", repeat_type: "daily"/"weekly", repeat_days: "1,3,5"
