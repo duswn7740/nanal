@@ -34,18 +34,13 @@ export default function LoginScreen({ navigation }) {
     setLoading(true);
 
     try {
-      setError('요청 중...');
       const { data } = await api.post('/auth/login', {
         email: email.trim(),
         password,
       });
-      setError('성공! 이동 중...');
       await login(data.token, data.user);
     } catch (err) {
-      const msg = err.response?.data?.message
-        ?? err.message
-        ?? '알 수 없는 오류';
-      setError(`실패: ${msg}`);
+      setError(err.response?.data?.message ?? '로그인에 실패했어요.');
     } finally {
       setLoading(false);
     }

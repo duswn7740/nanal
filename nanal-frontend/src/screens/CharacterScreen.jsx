@@ -252,14 +252,14 @@ const styles = StyleSheet.create({
   coinBadge: {
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: colors.roseLight,
+    backgroundColor: colors.lavenderLight,
     borderRadius: 20,
     paddingHorizontal: spacing.md,
     paddingVertical: 5,
     gap: 3,
   },
   coinC: { fontSize: typography.sm, fontFamily: fontFamily.bold, color: colors.roseDark },
-  coinNum: { fontSize: typography.sm, fontFamily: fontFamily.regular, color: colors.roseDark },
+  coinNum: { fontSize: typography.sm, fontFamily: fontFamily.bold, color: colors.lavenderDark },
 
   activeCard: {
     flexDirection: 'row', alignItems: 'center', gap: spacing.md,

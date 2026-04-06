@@ -14,10 +14,10 @@ function rewardLabel(reward) {
 }
 
 export default function GiftBoxModal({ visible, onClose, onCoinsUpdated }) {
-  const [opened, setOpened] = useState(false);   // 상자를 열었는지
-  const [reward, setReward] = useState(null);     // 받은 보상
-  const [adUsed, setAdUsed] = useState(false);    // 오늘 광고 이미 봤는지
+  const [reward, setReward] = useState(null);
+  const [adUsed, setAdUsed] = useState(false);
   const [loading, setLoading] = useState(false);
+  const opened = reward !== null;
 
   const handleOpen = async () => {
     if (loading) return;
@@ -25,13 +25,11 @@ export default function GiftBoxModal({ visible, onClose, onCoinsUpdated }) {
     try {
       const { data } = await api.post('/box/open');
       setReward(data.reward);
-      setOpened(true);
       onCoinsUpdated?.(data.coins);
     } catch (err) {
       // 이미 열었거나 서버 오류
       const msg = err.response?.data?.message ?? '오류가 발생했어요.';
       setReward({ type: 'error', message: msg });
-      setOpened(true);
     } finally {
       setLoading(false);
     }
@@ -54,7 +52,6 @@ export default function GiftBoxModal({ visible, onClose, onCoinsUpdated }) {
 
   const handleClose = () => {
     // 닫을 때 상태 초기화 (다음 날 다시 열릴 때를 위해)
-    setOpened(false);
     setReward(null);
     setAdUsed(false);
     onClose();
@@ -167,7 +164,7 @@ const styles = StyleSheet.create({
     fontSize: 52,
   },
   rewardText: {
-    fontSize: typography.xxl ?? 28,
+    fontSize: typography.xxl,
     fontFamily: fontFamily.bold,
     color: colors.lavenderDark,
     marginVertical: spacing.md,

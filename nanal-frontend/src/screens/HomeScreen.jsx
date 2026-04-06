@@ -171,28 +171,29 @@ export default function HomeScreen() {
           </EmptyState>
         </View>
       ) : editMode && sorted.length > 0 ? (
-        /* 편집모드: DraggableFlatList, 캐릭터 섹션은 헤더로 */
-        <DraggableFlatList
-          data={sorted}
-          keyExtractor={item => String(item.challenge_id)}
-          onDragEnd={handleReorder}
-          style={styles.scroll}
-          contentContainerStyle={styles.habitSection}
-          ListHeaderComponent={<CharacterHeader character={character} doneCount={doneCount} habitsLength={habits.length} xpPopup={xpPopup} xpOpacity={xpOpacity} xpAnim={xpAnim} />}
-          renderItem={({ item, drag, isActive }) => (
-            <HabitItem
-              habit={item}
-              onCheck={handleCheck}
-              editMode
-              onLongPress={() => {
-                setEditTarget(item);
-                setEditModalVisible(true);
-              }}
-              drag={drag}
-              isActive={isActive}
-            />
-          )}
-        />
+        /* 편집모드: CharacterHeader는 FlatList 밖, 드래그 리스트만 FlatList */
+        <View style={styles.scroll}>
+          <CharacterHeader character={character} doneCount={doneCount} habitsLength={habits.length} xpPopup={xpPopup} xpOpacity={xpOpacity} xpAnim={xpAnim} />
+          <DraggableFlatList
+            data={sorted}
+            keyExtractor={item => String(item.challenge_id)}
+            onDragEnd={handleReorder}
+            contentContainerStyle={styles.habitSection}
+            renderItem={({ item, drag, isActive }) => (
+              <HabitItem
+                habit={item}
+                onCheck={handleCheck}
+                editMode
+                onLongPress={() => {
+                  setEditTarget(item);
+                  setEditModalVisible(true);
+                }}
+                drag={drag}
+                isActive={isActive}
+              />
+            )}
+          />
+        </View>
       ) : (
         /* 일반모드: 단일 ScrollView */
         <ScrollView
@@ -331,7 +332,7 @@ const styles = StyleSheet.create({
   scroll: { flex: 1 },
   scrollContent: { paddingBottom: 100 },
 
-  editModeBtn: { fontSize: typography.xl, fontFamily: fontFamily.bold, color: colors.textMain },
+  editModeBtn: { fontSize: typography.sm, fontFamily: fontFamily.regular, color: colors.textSub },
 
   characterSection: {
     alignSelf: 'stretch',
@@ -347,7 +348,7 @@ const styles = StyleSheet.create({
     color: colors.lavenderDark,
     zIndex: 10,
   },
-  expWrapper: { width: '100%' },
+  expWrapper: { alignSelf: 'stretch' },
 
   habitSection: {
     paddingHorizontal: spacing.md,

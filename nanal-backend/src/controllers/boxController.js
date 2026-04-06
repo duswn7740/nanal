@@ -1,6 +1,6 @@
 const pool = require('../config/db');
-const { getTodayKST } = require('../utils/date');
-const { getLevelFromExp } = require('../utils/xp');
+const { getTodayKST, normalizeDateField } = require('../utils/date');
+const { grantExp } = require('../utils/character');
 
 // 선물상자 보상 테이블
 // 5xp: 50%, 10xp: 30%, 코인1개: 20%
@@ -20,21 +20,6 @@ function pickReward() {
   return REWARDS[0]; // fallback
 }
 
-// 활성 캐릭터에 XP 지급 + 레벨업 처리 (구매한 메인 캐릭터만)
-async function grantExp(userId, amount) {
-  const [[uc]] = await pool.query(
-    'SELECT id, exp FROM user_characters WHERE user_id = ? AND is_active = 1 AND is_purchased = TRUE LIMIT 1',
-    [userId]
-  );
-  if (!uc) return;
-  const newExp = uc.exp + amount;
-  const newLevel = getLevelFromExp(newExp);
-  await pool.query(
-    'UPDATE user_characters SET exp = ?, level = ? WHERE id = ?',
-    [newExp, newLevel, uc.id]
-  );
-}
-
 // POST /api/box/open
 // 오늘 선물상자 열기 (하루 1회)
 async function openBox(req, res) {
@@ -49,7 +34,7 @@ async function openBox(req, res) {
 
     // 오늘 이미 열었는지 확인
     const lastBoxDate = user.last_box_date
-      ? user.last_box_date.toISOString?.().slice(0, 10) ?? String(user.last_box_date).slice(0, 10)
+      ? normalizeDateField(user.last_box_date)
       : null;
     if (lastBoxDate === today) {
       return res.status(409).json({ message: '오늘은 이미 선물상자를 열었어요.' });
@@ -92,7 +77,7 @@ async function adReward(req, res) {
 
     // 오늘 상자를 아직 안 열었으면 광고 보상 불가
     const lastBoxDate = user.last_box_date
-      ? user.last_box_date.toISOString?.().slice(0, 10) ?? String(user.last_box_date).slice(0, 10)
+      ? normalizeDateField(user.last_box_date)
       : null;
     if (lastBoxDate !== today) {
       return res.status(400).json({ message: '먼저 오늘 선물상자를 열어야 해요.' });
@@ -100,7 +85,7 @@ async function adReward(req, res) {
 
     // 오늘 이미 광고 보상 받았는지 확인
     const lastAdDate = user.last_ad_date
-      ? user.last_ad_date.toISOString?.().slice(0, 10) ?? String(user.last_ad_date).slice(0, 10)
+      ? normalizeDateField(user.last_ad_date)
       : null;
     if (lastAdDate === today) {
       return res.status(409).json({ message: '오늘은 이미 광고 보상을 받았어요.' });
@@ -147,10 +132,10 @@ async function boxStatus(req, res) {
     );
 
     const lastBoxDate = user.last_box_date
-      ? user.last_box_date.toISOString?.().slice(0, 10) ?? String(user.last_box_date).slice(0, 10)
+      ? normalizeDateField(user.last_box_date)
       : null;
     const lastAdDate = user.last_ad_date
-      ? user.last_ad_date.toISOString?.().slice(0, 10) ?? String(user.last_ad_date).slice(0, 10)
+      ? normalizeDateField(user.last_ad_date)
       : null;
 
     return res.json({

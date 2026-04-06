@@ -1,22 +1,6 @@
 const pool = require('../config/db');
 const { getTodayKST, getYesterdayKST, normalizeDateStr } = require('../utils/date');
-const { getLevelFromExp } = require('../utils/xp');
-
-// 체크인 후 활성 캐릭터에 XP 지급 + 레벨업 처리
-// is_purchased = TRUE인 메인 캐릭터만 XP 증가
-async function grantExp(userId, amount) {
-  const [[uc]] = await pool.query(
-    'SELECT id, exp FROM user_characters WHERE user_id = ? AND is_active = 1 AND is_purchased = TRUE LIMIT 1',
-    [userId]
-  );
-  if (!uc) return;
-  const newExp = uc.exp + amount;
-  const newLevel = getLevelFromExp(newExp);
-  await pool.query(
-    'UPDATE user_characters SET exp = ?, level = ? WHERE id = ?',
-    [newExp, newLevel, uc.id]
-  );
-}
+const { grantExp } = require('../utils/character');
 
 // 캐릭터 해금 조건 체크 후 미보유 캐릭터 자동 지급
 async function checkUnlocks(userId) {

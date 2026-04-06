@@ -62,11 +62,11 @@ export default function HabitForm({ initialValues, onSubmit, submitLabel, loadin
     setError('');
   }, [initialValues]);
 
-  const toggleDay = (idx) =>
-    setSelectedDays(prev => prev.includes(idx) ? prev.filter(d => d !== idx) : [...prev, idx]);
+  const toggle = (setter) => (val) =>
+    setter(prev => prev.includes(val) ? prev.filter(v => v !== val) : [...prev, val]);
 
-  const toggleAlarm = (value) =>
-    setSelectedAlarms(prev => prev.includes(value) ? prev.filter(v => v !== value) : [...prev, value]);
+  const toggleDay = toggle(setSelectedDays);
+  const toggleAlarm = toggle(setSelectedAlarms);
 
   const handleSubmit = () => {
     if (!title.trim()) { setError('제목을 입력해줘요.'); return; }

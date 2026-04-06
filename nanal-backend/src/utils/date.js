@@ -48,4 +48,11 @@ function normalizeDateStr(date) {
   return `${y}-${m}-${d}`;
 }
 
-module.exports = { getTodayKST, getYesterdayKST, getKSTDateDaysAgo, normalizeDateStr };
+// MariaDB DATE 컬럼 → 'YYYY-MM-DD' 문자열 (toISOString 기반, UTC 기준으로 slice)
+function normalizeDateField(val) {
+  if (!val) return null;
+  if (val instanceof Date) return val.toISOString().slice(0, 10);
+  return String(val).slice(0, 10);
+}
+
+module.exports = { getTodayKST, getYesterdayKST, getKSTDateDaysAgo, normalizeDateStr, normalizeDateField };
