@@ -53,11 +53,12 @@ export default function CharacterScreen() {
       setShopChars(shopRes.data.characters ?? []);
       setCoins(boxRes.data.coins ?? 0);
 
-      const map = {};
-      for (const c of (ownedRes.data.characters ?? [])) {
-        map[c.character_id] = { level: c.level, exp: c.exp, uc_id: c.id, is_active: c.is_active };
-      }
-      setOwnedMap(map);
+      setOwnedMap(Object.fromEntries(
+        (ownedRes.data.characters ?? []).map(c => [
+          c.character_id,
+          { level: c.level, exp: c.exp, uc_id: c.id, is_active: c.is_active },
+        ])
+      ));
     } catch {
       // 무시
     } finally {

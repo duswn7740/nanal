@@ -1,7 +1,7 @@
 import React, { useState, useCallback, useEffect, useMemo, useRef } from 'react';
 import {
-  View, Text, ScrollView, TouchableOpacity,
-  StyleSheet, SafeAreaView, Image, RefreshControl, AppState, Animated, Alert,
+  View, Text, ScrollView, TouchableOpacity, Modal,
+  StyleSheet, SafeAreaView, Image, RefreshControl, AppState, Alert, BackHandler,
 } from 'react-native';
 import { Swipeable } from 'react-native-gesture-handler';
 import { useNavigation } from '@react-navigation/native';
@@ -25,7 +25,6 @@ export default function HomeScreen() {
   const [allChallenges, setAllChallenges] = useState([]);
   const [showAll, setShowAll] = useState(false);
   const [character, setCharacter] = useState(null);
-  const [coins, setCoins] = useState(0);
   const [refreshing, setRefreshing] = useState(false);
   const [error, setError] = useState(false);
   const [modalVisible, setModalVisible] = useState(false);
@@ -38,9 +37,7 @@ export default function HomeScreen() {
   const allChallengesRef = useRef([]);
   const currentOpenSwipeable = useRef(null); // 현재 열린 스와이프 카드
   const [anySwipeOpen, setAnySwipeOpen] = useState(false);
-  const [xpPopup, setXpPopup] = useState(null); // 표시할 XP 텍스트 (예: '+10 XP')
-  const xpAnim = useRef(new Animated.ValueXY({ x: 0, y: 0 })).current;
-  const xpOpacity = useRef(new Animated.Value(0)).current;
+  const [xpModal, setXpModal] = useState(null); // { xp, isAllDone }
 
   const fetchToday = useCallback(async () => {
     setError(false);
@@ -57,7 +54,6 @@ export default function HomeScreen() {
         habit_time: c.habit_time ? String(c.habit_time).slice(0, 5) : null,
       })));
       setCharacter(charRes.data.character);
-      setCoins(boxRes.data.coins);
       rescheduleAllHabits(challengeRes.data.challenges);
 
       // 오늘 아직 상자를 안 열었으면 모달 자동 오픈
@@ -101,25 +97,6 @@ export default function HomeScreen() {
     }
   }, [fetchToday]);
 
-  // XP 획득 시 캐릭터 위에 팝업 텍스트가 올라가며 사라지는 애니메이션
-  const showXpPopup = useCallback((xp) => {
-    if (!xp || xp <= 0) return;
-    setXpPopup(`+${xp} XP`);
-    xpAnim.setValue({ x: 0, y: 0 });
-    xpOpacity.setValue(1);
-    Animated.parallel([
-      Animated.timing(xpAnim, {
-        toValue: { x: 0, y: -60 },
-        duration: 900,
-        useNativeDriver: true,
-      }),
-      Animated.timing(xpOpacity, {
-        toValue: 0,
-        duration: 900,
-        useNativeDriver: true,
-      }),
-    ]).start(() => setXpPopup(null));
-  }, [xpAnim, xpOpacity]);
 
   // 편집모드 진입: 전체 습관 순서 스냅샷
   const enterEditMode = useCallback(() => {
@@ -149,6 +126,16 @@ export default function HomeScreen() {
     currentOpenSwipeable.current = null;
     setAnySwipeOpen(false);
   }, []);
+
+  // 편집모드일 때 뒤로가기 버튼 → 앱 종료 대신 편집모드 종료
+  useEffect(() => {
+    if (!editMode) return;
+    const sub = BackHandler.addEventListener('hardwareBackPress', () => {
+      exitEditMode();
+      return true;
+    });
+    return () => sub.remove();
+  }, [editMode, exitEditMode]);
 
   // 탭 전환 시 열린 스와이프 카드 닫기
   useEffect(() => {
@@ -222,23 +209,28 @@ export default function HomeScreen() {
   }, []);
 
   const handleCheck = useCallback(async (challengeId, isDone) => {
+    // 낙관적 업데이트: API 응답 전에 UI 먼저 반영
+    setHabits(prev =>
+      prev.map(h => h.challenge_id === challengeId ? { ...h, is_done: !isDone } : h)
+    );
     try {
       if (isDone) {
         await api.post('/logs/uncheck', { challenge_id: challengeId });
-        setHabits(prev =>
-          prev.map(h => h.challenge_id === challengeId ? { ...h, is_done: false } : h)
-        );
       } else {
         const { data } = await api.post('/logs/checkin', { challenge_id: challengeId });
-        setHabits(prev =>
-          prev.map(h => h.challenge_id === challengeId ? { ...h, is_done: true } : h)
-        );
-        showXpPopup(data.xpGain);
+        if (data.xpGain > 0) {
+          const allDone = data.xpGain >= 15; // 10(완료) + 5(전체완료 or 연속) 이상이면 보너스 있음
+          setXpModal({ xp: data.xpGain, allDone: data.xpGain >= 15 });
+        }
       }
     } catch (err) {
+      // 실패 시 원래 상태로 되돌리기
+      setHabits(prev =>
+        prev.map(h => h.challenge_id === challengeId ? { ...h, is_done: isDone } : h)
+      );
       if (err.response?.status !== 409) alert('요청에 실패했어요. 다시 시도해줘요.');
     }
-  }, [showXpPopup]);
+  }, []);
 
   // 오늘 아닌 습관 (showAll 모드에서 하단에 표시, 체크 불가)
   const nonTodayHabits = useMemo(() => {
@@ -318,7 +310,7 @@ export default function HomeScreen() {
       ) : editMode && editSorted.length > 0 ? (
         /* 편집모드: CharacterHeader는 FlatList 밖, 드래그 리스트만 FlatList */
         <View style={styles.scroll}>
-          <CharacterHeader character={character} doneCount={doneCount} habitsLength={habits.length} xpPopup={xpPopup} xpOpacity={xpOpacity} xpAnim={xpAnim} />
+          <CharacterHeader character={character} doneCount={doneCount} habitsLength={habits.length} />
           <DraggableFlatList
             data={editSorted}
             keyExtractor={item => String(item.challenge_id)}
@@ -352,7 +344,7 @@ export default function HomeScreen() {
             />
           }
         >
-          <CharacterHeader character={character} doneCount={doneCount} habitsLength={habits.length} xpPopup={xpPopup} xpOpacity={xpOpacity} xpAnim={xpAnim} />
+          <CharacterHeader character={character} doneCount={doneCount} habitsLength={habits.length} />
           {sorted.length === 0 ? (
             <View style={styles.habitSection}>
               <EmptyState
@@ -400,7 +392,7 @@ export default function HomeScreen() {
       <GiftBoxModal
         visible={giftBoxVisible}
         onClose={() => setGiftBoxVisible(false)}
-        onCoinsUpdated={(newCoins) => setCoins(newCoins)}
+        onCoinsUpdated={() => {}}
       />
 
       <EditHabitModal
@@ -418,27 +410,28 @@ export default function HomeScreen() {
           cancelHabitNotifications(challengeId);
         }}
       />
+
+      <XpModal
+        visible={!!xpModal}
+        xp={xpModal?.xp ?? 0}
+        allDone={xpModal?.allDone ?? false}
+        onClose={() => setXpModal(null)}
+        onWatchAd={() => {
+          // TODO: 광고 연동 후 2배 지급
+          setXpModal(null);
+        }}
+      />
     </SafeAreaView>
   );
 }
 
-function CharacterHeader({ character, doneCount, habitsLength, xpPopup, xpOpacity, xpAnim }) {
+function CharacterHeader({ character, doneCount, habitsLength }) {
   return (
     <View style={styles.characterSection}>
-      <View style={styles.avatarWrapper}>
-        {xpPopup && (
-          <Animated.Text style={[
-            styles.xpPopup,
-            { opacity: xpOpacity, transform: xpAnim.getTranslateTransform() },
-          ]}>
-            {xpPopup}
-          </Animated.Text>
-        )}
-        <Avatar
-          size="lg"
-          image={character ? getCharacterImage(character.name, character.level) : null}
-        />
-      </View>
+      <Avatar
+        size="lg"
+        image={character ? getCharacterImage(character.name, character.level) : null}
+      />
       <View style={styles.expWrapper}>
         <ProgressBar
           value={doneCount}
@@ -448,6 +441,30 @@ function CharacterHeader({ character, doneCount, habitsLength, xpPopup, xpOpacit
         />
       </View>
     </View>
+  );
+}
+
+function XpModal({ visible, xp, allDone, onClose, onWatchAd }) {
+  return (
+    <Modal visible={visible} transparent animationType="fade" onRequestClose={onClose}>
+      <TouchableOpacity style={styles.xpOverlay} activeOpacity={1} onPress={onClose}>
+        <TouchableOpacity activeOpacity={1} style={styles.xpCard}>
+          <Text style={styles.xpTitle}>🎉 경험치 획득!</Text>
+          <Text style={styles.xpAmount}>+{xp} XP</Text>
+          {allDone && (
+            <View style={styles.xpBonusBadge}>
+              <Text style={styles.xpBonusText}>보너스 포함</Text>
+            </View>
+          )}
+          <TouchableOpacity style={styles.xpAdBtn} onPress={onWatchAd} activeOpacity={0.8}>
+            <Text style={styles.xpAdBtnText}>📺 광고 보고 2배 받기</Text>
+          </TouchableOpacity>
+          <TouchableOpacity style={styles.xpCloseBtn} onPress={onClose} activeOpacity={0.8}>
+            <Text style={styles.xpCloseBtnText}>나가기</Text>
+          </TouchableOpacity>
+        </TouchableOpacity>
+      </TouchableOpacity>
+    </Modal>
   );
 }
 
@@ -475,10 +492,7 @@ function HabitItem({ habit, onCheck, editMode, onEdit, onSwipeOpen, onSwipeClose
   const renderRightActions = () => (
     <TouchableOpacity
       style={styles.swipeAction}
-      onPress={() => {
-        swipeableRef.current?.close();
-        onEdit(habit);
-      }}
+      onPress={() => { swipeableRef.current?.close(); onEdit(habit); }}
     >
       <Image source={require('../../assets/icons/edit.png')} style={styles.swipeActionIcon} />
     </TouchableOpacity>
@@ -491,10 +505,7 @@ function HabitItem({ habit, onCheck, editMode, onEdit, onSwipeOpen, onSwipeClose
       overshootRight={false}
       onSwipeableWillOpen={() => onSwipeOpen?.(swipeableRef.current)}
       onSwipeableClose={() => onSwipeClose?.()}
-      containerStyle={[
-        styles.habitCard,
-        done || disabled ? styles.habitItemDone : null,
-      ]}
+      containerStyle={[styles.habitCard, (done || disabled) && styles.habitItemDone]}
     >
       <View style={styles.habitCardContent}>
         <CheckButton done={disabled ? false : done} onPress={disabled ? undefined : () => onCheck(habit.challenge_id, done)} size={44} />
@@ -521,18 +532,6 @@ const styles = StyleSheet.create({
     paddingVertical: spacing.lg,
     paddingHorizontal: spacing.xl,
     gap: spacing.md,
-  },
-  avatarWrapper: {
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  xpPopup: {
-    position: 'absolute',
-    top: -28,
-    fontSize: typography.lg,
-    fontFamily: fontFamily.bold,
-    color: colors.lavenderDark,
-    zIndex: 10,
   },
   expWrapper: { alignSelf: 'stretch' },
 
@@ -623,4 +622,41 @@ const styles = StyleSheet.create({
     borderRadius: radius.md,
   },
   retryText: { fontSize: typography.sm, fontFamily: fontFamily.bold, color: colors.textMain },
+
+  xpOverlay: {
+    flex: 1, backgroundColor: 'rgba(0,0,0,0.4)',
+    justifyContent: 'center', paddingHorizontal: spacing.xl,
+  },
+  xpCard: {
+    backgroundColor: colors.surface, borderRadius: radius.lg,
+    padding: spacing.xl, alignItems: 'center', gap: spacing.md,
+  },
+  xpTitle: {
+    fontSize: typography.lg, fontFamily: fontFamily.bold, color: colors.textMain,
+  },
+  xpAmount: {
+    fontSize: 40, fontFamily: fontFamily.bold, color: colors.lavenderDark,
+  },
+  xpBonusBadge: {
+    backgroundColor: colors.lavenderLight, borderRadius: radius.full,
+    paddingHorizontal: spacing.md, paddingVertical: spacing.xs,
+  },
+  xpBonusText: {
+    fontSize: typography.xs, fontFamily: fontFamily.bold, color: colors.lavenderDark,
+  },
+  xpAdBtn: {
+    width: '100%', backgroundColor: colors.lavender,
+    borderRadius: radius.lg, paddingVertical: spacing.md,
+    alignItems: 'center', marginTop: spacing.sm,
+  },
+  xpAdBtnText: {
+    fontSize: typography.md, fontFamily: fontFamily.bold, color: colors.surface,
+  },
+  xpCloseBtn: {
+    width: '100%', borderRadius: radius.lg, paddingVertical: spacing.md,
+    alignItems: 'center', borderWidth: 1, borderColor: colors.border,
+  },
+  xpCloseBtnText: {
+    fontSize: typography.md, fontFamily: fontFamily.regular, color: colors.textSub,
+  },
 });

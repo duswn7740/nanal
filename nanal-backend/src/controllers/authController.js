@@ -41,7 +41,7 @@ async function signup(req, res) {
 
     // 회원가입 시 기본 캐릭터(꽃, id=1) 자동 지급 + 활성화
     await pool.query(
-      'INSERT INTO user_characters (user_id, character_id, level, exp, is_active) VALUES (?, 1, 1, 0, 1)',
+      'INSERT INTO user_characters (user_id, character_id, level, exp, is_active, is_purchased) VALUES (?, 1, 1, 0, 1, 1)',
       [result.insertId]
     );
 

@@ -13,16 +13,12 @@ const DEFAULT_VALUES = {
 export default function AddHabitModal({ visible, onClose, onAdded }) {
   const [loading, setLoading] = useState(false);
 
-  const handleClose = () => {
-    onClose();
-  };
-
   const handleSubmit = async (values) => {
     setLoading(true);
     try {
       const { data } = await api.post('/challenges', values);
       onAdded(data.challenge);
-      handleClose();
+      onClose();
     } catch (err) {
       // HabitForm의 error state가 없으므로 alert로 fallback
       alert(err.response?.data?.message ?? '저장에 실패했어요. 다시 시도해줘요.');
@@ -32,9 +28,9 @@ export default function AddHabitModal({ visible, onClose, onAdded }) {
   };
 
   return (
-    <Modal visible={visible} animationType="slide" onRequestClose={handleClose}>
+    <Modal visible={visible} animationType="slide" onRequestClose={onClose}>
       <SafeAreaView style={styles.safeArea}>
-        <Header title="습관 추가" onBack={handleClose} />
+        <Header title="습관 추가" onBack={onClose} />
         <HabitForm
           key={String(visible)}
           initialValues={DEFAULT_VALUES}

@@ -58,6 +58,7 @@ async function checkin(req, res) {
   }
 
   const today = getTodayKST(); // KST 기준 오늘 날짜 (ex: '2026-03-27')
+  const todayDow = new Date(Date.now() + 9 * 60 * 60 * 1000).getUTCDay(); // KST 기준 요일 (0=일)
 
   try {
     // Step 1: 챌린지가 본인 소유이고 활성 상태인지 확인
@@ -126,22 +127,36 @@ async function checkin(req, res) {
       [userId]
     );
 
-    // Step 6: XP 지급 (체크인 +10, 연속달성 +5, 전체완료 보너스 +5)
+    // Step 6: XP 지급 (하루 첫 체크인 +10, 연속달성 +5, 전체완료 보너스 +5)
     // 취소 후 재체크인이면 XP 지급 건너뜀
     let xpGain = 0;
     if (!alreadyGranted) {
-      xpGain = 10 + (continuedStreak ? 5 : 0);
+      // 오늘 이미 다른 습관에서 XP를 받았는지 확인 (하루 첫 체크인에만 +10+연속보너스 지급)
+      const [[alreadyXpRow]] = await pool.query(
+        `SELECT COUNT(*) AS cnt
+         FROM logs l
+         JOIN challenges c ON c.id = l.challenge_id
+         WHERE c.user_id = ? AND l.log_date = ? AND l.xp_granted = TRUE AND l.challenge_id != ?`,
+        [userId, today, challenge_id]
+      );
+      const isFirstCheckinToday = alreadyXpRow.cnt === 0;
 
-      // 오늘 활성 습관 전체 완료 여부 확인
+      if (isFirstCheckinToday) {
+        xpGain = 10 + (continuedStreak ? 5 : 0);
+      }
+
+      // 오늘 스케줄된 습관 전체 완료 여부 확인 (오늘 요일에 해당하는 습관만 카운트)
       const [[allDoneRow]] = await pool.query(
         `SELECT
            COUNT(*) AS total,
            SUM(CASE WHEN l.is_done = TRUE THEN 1 ELSE 0 END) AS done
          FROM challenges c
          LEFT JOIN logs l ON l.challenge_id = c.id AND l.log_date = ?
-         WHERE c.user_id = ? AND c.is_active = TRUE`,
-        [today, userId]
+         WHERE c.user_id = ? AND c.is_active = TRUE
+           AND (c.repeat_type = 'daily' OR FIND_IN_SET(?, c.repeat_days))`,
+        [today, userId, todayDow]
       );
+
       const allDone = allDoneRow.total > 0 && allDoneRow.total === allDoneRow.done;
 
       if (allDone) {
@@ -159,13 +174,15 @@ async function checkin(req, res) {
         }
       }
 
-      await grantExp(userId, xpGain);
-      await checkUnlocks(userId);
+      if (xpGain > 0) {
+        await grantExp(userId, xpGain);
+        await checkUnlocks(userId);
+      }
 
-      // XP 지급 완료 표시
+      // XP 지급 완료 표시 + 지급량 저장
       await pool.query(
-        'UPDATE logs SET xp_granted = TRUE WHERE challenge_id = ? AND log_date = ?',
-        [challenge_id, today]
+        'UPDATE logs SET xp_granted = TRUE, xp_amount = ? WHERE challenge_id = ? AND log_date = ?',
+        [xpGain, challenge_id, today]
       );
     }
 
@@ -302,18 +319,34 @@ async function uncheck(req, res) {
 
     // 오늘 완료된 로그 확인
     const [logs] = await pool.query(
-      'SELECT id FROM logs WHERE challenge_id = ? AND log_date = ? AND is_done = TRUE',
+      'SELECT id, xp_amount FROM logs WHERE challenge_id = ? AND log_date = ? AND is_done = TRUE',
       [challenge_id, today]
     );
     if (logs.length === 0) {
       return res.status(409).json({ message: '오늘 완료된 기록이 없습니다.' });
     }
 
-    // 체크인 취소: is_done = false
+    // 체크인 취소: is_done = false, xp 초기화
     await pool.query(
-      'UPDATE logs SET is_done = FALSE, done_at = NULL, memo = NULL WHERE id = ?',
+      'UPDATE logs SET is_done = FALSE, done_at = NULL, memo = NULL, xp_granted = FALSE, xp_amount = 0 WHERE id = ?',
       [logs[0].id]
     );
+
+    // XP 환수
+    const xpAmount = logs[0].xp_amount ?? 0;
+    if (xpAmount > 0) {
+      await pool.query(
+        `UPDATE user_characters
+         SET exp = GREATEST(0, exp - ?)
+         WHERE user_id = ? AND is_active = 1 AND is_purchased = TRUE`,
+        [xpAmount, userId]
+      );
+      // 전체완료 보너스 받았을 수 있으니 오늘 날짜 리셋 → 다시 전체완료 시 보너스 재지급 가능
+      await pool.query(
+        'UPDATE users SET last_all_done_date = NULL WHERE id = ? AND last_all_done_date = ?',
+        [userId, today]
+      );
+    }
 
     // 스트릭 롤백: 어제 완료 여부에 따라 결정
     const yesterday = getYesterdayKST();
