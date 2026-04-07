@@ -1,6 +1,6 @@
 import React, { useState, useCallback } from 'react';
 import {
-  View, Text, ScrollView, TouchableOpacity, Modal,
+  View, Text, ScrollView, TouchableOpacity, Modal, Image,
   SafeAreaView, StyleSheet, ActivityIndicator, Alert, Dimensions,
 } from 'react-native';
 
@@ -37,7 +37,7 @@ export default function CharacterScreen() {
   const [ownedMap, setOwnedMap] = useState({});      // character_id → { level, exp, uc_id }
   const [coins, setCoins] = useState(0);
   const [loading, setLoading] = useState(false);
-  const [buying, setBuying] = useState(null);        // 구매 중인 character_id
+  const [buying, setBuying] = useState(null);
   const [xpModalVisible, setXpModalVisible] = useState(false);
 
   const fetchData = useCallback(async () => {
@@ -134,7 +134,7 @@ export default function CharacterScreen() {
         title="캐릭터"
         right={
           <View style={styles.coinBadge}>
-            <Text style={styles.coinC}>C</Text>
+            <Image source={require('../../assets/icons/coin.png')} style={styles.coinIcon} />
             <Text style={styles.coinNum}>{coins}</Text>
           </View>
         }
@@ -182,6 +182,10 @@ export default function CharacterScreen() {
                   </View>
                   <Text style={styles.charName}>{char.name}</Text>
                   <Text style={styles.unlockCondition}>{char.unlock_condition}</Text>
+                  <View style={styles.priceTag}>
+                    <Image source={require('../../assets/icons/coin.png')} style={styles.priceIcon} />
+                    <Text style={styles.priceText}>{char.price}</Text>
+                  </View>
                 </View>
               );
             }
@@ -189,21 +193,20 @@ export default function CharacterScreen() {
             if (!isPurchased) {
               // 해금됐지만 미구매
               return (
-                <View key={char.id} style={[styles.charCard, styles.charCardUnlocked]}>
+                <TouchableOpacity
+                  key={char.id}
+                  style={[styles.charCard, styles.charCardUnlocked]}
+                  onPress={() => handleBuy(char)}
+                  disabled={buying === char.id}
+                  activeOpacity={0.8}
+                >
                   <Avatar size="md" image={image} />
                   <Text style={styles.charName}>{char.name}</Text>
-                  <TouchableOpacity
-                    style={styles.buyButton}
-                    onPress={() => handleBuy(char)}
-                    disabled={buying === char.id}
-                    activeOpacity={0.8}
-                  >
-                    {buying === char.id
-                      ? <ActivityIndicator size="small" color={colors.surface} />
-                      : <Text style={styles.buyButtonText}>🪙 {char.price}</Text>
-                    }
-                  </TouchableOpacity>
-                </View>
+                  <View style={styles.priceTag}>
+                    <Image source={require('../../assets/icons/coin.png')} style={styles.priceIcon} />
+                    <Text style={styles.priceText}>{char.price}</Text>
+                  </View>
+                </TouchableOpacity>
               );
             }
 
@@ -258,11 +261,11 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     backgroundColor: colors.lavenderLight,
     borderRadius: 20,
-    paddingHorizontal: spacing.md,
+    paddingHorizontal: spacing.sm,
     paddingVertical: 5,
-    gap: 3,
+    gap: 8,
   },
-  coinC: { fontSize: typography.sm, fontFamily: fontFamily.bold, color: colors.roseDark },
+  coinIcon: { width: 16, height: 16, resizeMode: 'contain' },
   coinNum: { fontSize: typography.sm, fontFamily: fontFamily.bold, color: colors.lavenderDark },
 
   activeCard: {
@@ -311,11 +314,12 @@ const styles = StyleSheet.create({
     color: colors.textSub, textAlign: 'center',
   },
 
-  buyButton: {
-    backgroundColor: colors.lavenderDark, borderRadius: radius.full,
-    paddingHorizontal: spacing.sm, paddingVertical: 4, marginTop: 2,
+  priceTag: {
+    flexDirection: 'row', alignItems: 'center', gap: 3,
+    marginTop: 2, opacity: 0.45,
   },
-  buyButtonText: { fontSize: typography.xs, fontFamily: fontFamily.bold, color: colors.surface },
+  priceIcon: { width: 13, height: 13, resizeMode: 'contain' },
+  priceText: { fontSize: typography.xs, fontFamily: fontFamily.bold, color: colors.textMain },
 
   ownedBadge: {
     backgroundColor: colors.surface, borderRadius: radius.full,

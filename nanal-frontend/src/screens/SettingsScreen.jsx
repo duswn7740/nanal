@@ -80,7 +80,7 @@ export default function SettingsScreen() {
           </View>
         </View>
 
-        <Text style={styles.version}>나날이 v1.0.0</Text>
+        <Text style={styles.version}>나날 v1.0.0</Text>
       </ScrollView>
 
       {/* 닉네임 변경 모달 */}

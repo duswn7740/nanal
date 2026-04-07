@@ -13,7 +13,7 @@ import CheckButton from '../components/CheckButton';
 import EmptyState from '../components/EmptyState';
 import api from '../api';
 import { getCharacterImage } from '../constants/characterImages';
-import DraggableFlatList from 'react-native-draggable-flatlist';
+import DraggableFlatList, { ScaleDecorator } from 'react-native-draggable-flatlist';
 import AddHabitModal from './AddHabitModal';
 import EditHabitModal from './EditHabitModal';
 import GiftBoxModal from './GiftBoxModal';
@@ -22,6 +22,8 @@ import { rescheduleAllHabits, scheduleHabitNotifications, cancelHabitNotificatio
 export default function HomeScreen() {
   const navigation = useNavigation();
   const [habits, setHabits] = useState([]);
+  const [allChallenges, setAllChallenges] = useState([]);
+  const [showAll, setShowAll] = useState(false);
   const [character, setCharacter] = useState(null);
   const [coins, setCoins] = useState(0);
   const [refreshing, setRefreshing] = useState(false);
@@ -32,7 +34,8 @@ export default function HomeScreen() {
   const [headerMenuVisible, setHeaderMenuVisible] = useState(false);
   const [editTarget, setEditTarget] = useState(null);
   const [editModalVisible, setEditModalVisible] = useState(false);
-  const originalHabitsRef = useRef(null); // 편집모드 진입 시 순서 스냅샷
+  const originalHabitsRef = useRef(null);
+  const allChallengesRef = useRef([]);
   const currentOpenSwipeable = useRef(null); // 현재 열린 스와이프 카드
   const [anySwipeOpen, setAnySwipeOpen] = useState(false);
   const [xpPopup, setXpPopup] = useState(null); // 표시할 XP 텍스트 (예: '+10 XP')
@@ -49,6 +52,10 @@ export default function HomeScreen() {
         api.get('/box/status'),
       ]);
       setHabits(logsRes.data.logs);
+      setAllChallenges(challengeRes.data.challenges.map(c => ({
+        ...c,
+        habit_time: c.habit_time ? String(c.habit_time).slice(0, 5) : null,
+      })));
       setCharacter(charRes.data.character);
       setCoins(boxRes.data.coins);
       rescheduleAllHabits(challengeRes.data.challenges);
@@ -114,12 +121,14 @@ export default function HomeScreen() {
     ]).start(() => setXpPopup(null));
   }, [xpAnim, xpOpacity]);
 
-  // 편집모드 진입: 현재 순서 스냅샷
+  // 편집모드 진입: 전체 습관 순서 스냅샷
   const enterEditMode = useCallback(() => {
-    originalHabitsRef.current = habits.map(h => ({ challenge_id: h.challenge_id, display_order: h.display_order }));
+    originalHabitsRef.current = allChallenges.map(c => ({ challenge_id: c.id, display_order: c.display_order }));
     setEditMode(true);
     setHeaderMenuVisible(false);
-  }, [habits]);
+  }, [allChallenges]);
+
+  useEffect(() => { allChallengesRef.current = allChallenges; }, [allChallenges]);
 
   // 편집모드 정상 종료 (완료 버튼)
   const exitEditMode = useCallback(() => {
@@ -141,59 +150,76 @@ export default function HomeScreen() {
     setAnySwipeOpen(false);
   }, []);
 
-  // 탭 전환 시 편집모드면 저장 여부 물어보기 + 열린 카드 닫기
+  // 탭 전환 시 열린 스와이프 카드 닫기
   useEffect(() => {
+    const unsubscribe = navigation.addListener('blur', closeCurrentSwipeable);
+    return unsubscribe;
+  }, [navigation, closeCurrentSwipeable]);
+
+  // 편집모드일 때 탭 전환 감지: 변경 있으면 저장 여부 물어보기, 없으면 그냥 종료
+  useEffect(() => {
+    if (!editMode) return;
     const unsubscribe = navigation.addListener('blur', () => {
-      closeCurrentSwipeable();
-      if (!editMode) return;
-      Alert.alert(
-        '순서 편집 중',
-        '변경된 순서를 저장할까요?',
-        [
-          {
-            text: '저장 안 함',
-            onPress: async () => {
-              const original = originalHabitsRef.current;
-              if (original) {
-                // 원본 순서로 복원
-                setHabits(prev => prev.map(h => {
-                  const o = original.find(r => r.challenge_id === h.challenge_id);
-                  return o ? { ...h, display_order: o.display_order } : h;
-                }));
-                api.put('/challenges/reorder', {
-                  orders: original.map(r => ({ id: r.challenge_id, display_order: r.display_order })),
-                }).catch(() => {});
-              }
-              originalHabitsRef.current = null;
-              setEditMode(false);
+      const original = originalHabitsRef.current;
+      const current = allChallengesRef.current;
+      const hasChanges = original?.some(o => {
+        const c = current.find(ch => ch.id === o.challenge_id);
+        return c?.display_order !== o.display_order;
+      }) ?? false;
+
+      if (!hasChanges) {
+        originalHabitsRef.current = null;
+        setEditMode(false);
+        return;
+      }
+
+      setTimeout(() => {
+        Alert.alert(
+          '순서 편집 중',
+          '변경된 순서를 저장할까요?',
+          [
+            {
+              text: '저장 안 함',
+              onPress: () => {
+                if (original) {
+                  setAllChallenges(prev => prev.map(c => {
+                    const o = original.find(r => r.challenge_id === c.id);
+                    return o ? { ...c, display_order: o.display_order } : c;
+                  }));
+                  api.put('/challenges/reorder', {
+                    orders: original.map(r => ({ id: r.challenge_id, display_order: r.display_order })),
+                  }).catch(() => {});
+                }
+                originalHabitsRef.current = null;
+                setEditMode(false);
+              },
             },
-          },
-          {
-            text: '저장',
-            onPress: () => {
-              originalHabitsRef.current = null;
-              setEditMode(false);
+            {
+              text: '저장',
+              onPress: () => {
+                originalHabitsRef.current = null;
+                setEditMode(false);
+              },
             },
-          },
-        ]
-      );
+          ],
+          { cancelable: false }
+        );
+      }, 50);
     });
     return unsubscribe;
-  }, [navigation, editMode, closeCurrentSwipeable]);
+  }, [navigation, editMode]);
 
-  // 드래그 완료 시 순서 서버에 저장 후 자동 새로고침
+  // 드래그 완료 시 순서 서버에 저장
   const handleReorder = useCallback(async ({ data }) => {
-    const reordered = data.map((h, idx) => ({ ...h, display_order: idx }));
-    setHabits(reordered);
+    const reordered = data.map((item, idx) => ({ ...item, display_order: idx }));
+    const orderMap = Object.fromEntries(reordered.map(h => [h.challenge_id, h.display_order]));
+    setAllChallenges(prev => prev.map(c => orderMap[c.id] !== undefined ? { ...c, display_order: orderMap[c.id] } : c));
     try {
       await api.put('/challenges/reorder', {
         orders: reordered.map(h => ({ id: h.challenge_id, display_order: h.display_order })),
       });
-      await fetchToday();
-    } catch {
-      // 실패해도 로컬 상태는 유지
-    }
-  }, [fetchToday]);
+    } catch { }
+  }, []);
 
   const handleCheck = useCallback(async (challengeId, isDone) => {
     try {
@@ -214,19 +240,32 @@ export default function HomeScreen() {
     }
   }, [showXpPopup]);
 
-  // 일반모드: 미완료 → 완료 순 정렬
-  const sorted = useMemo(() => [...habits].sort((a, b) => {
-    if (a.is_done !== b.is_done) return a.is_done ? 1 : -1;
-    if (!a.habit_time && b.habit_time) return -1;
-    if (a.habit_time && !b.habit_time) return 1;
-    if (a.habit_time && b.habit_time) return a.habit_time.localeCompare(b.habit_time);
-    return (a.display_order ?? 0) - (b.display_order ?? 0);
-  }), [habits]);
+  // 오늘 아닌 습관 (showAll 모드에서 하단에 표시, 체크 불가)
+  const nonTodayHabits = useMemo(() => {
+    const todayIds = new Set(habits.map(h => h.challenge_id));
+    return allChallenges
+      .filter(c => !todayIds.has(c.id))
+      .map(c => ({ challenge_id: c.id, title: c.title, habit_time: c.habit_time, display_order: c.display_order, is_done: false, isNonToday: true }));
+  }, [habits, allChallenges]);
 
-  // 편집모드: display_order만으로 정렬 (달성 여부 무시)
-  const editSorted = useMemo(() => [...habits].sort((a, b) =>
-    (a.display_order ?? 0) - (b.display_order ?? 0)
-  ), [habits]);
+  // 일반/모두보기 모드: 미완료 → 완료 → (오늘 아닌 습관)
+  const sorted = useMemo(() => {
+    const todayHabits = [...habits].sort((a, b) => {
+      if (a.is_done !== b.is_done) return a.is_done ? 1 : -1;
+      if (!a.habit_time && b.habit_time) return -1;
+      if (a.habit_time && !b.habit_time) return 1;
+      if (a.habit_time && b.habit_time) return a.habit_time.localeCompare(b.habit_time);
+      return (a.display_order ?? 0) - (b.display_order ?? 0);
+    });
+    return showAll ? [...todayHabits, ...nonTodayHabits] : todayHabits;
+  }, [habits, nonTodayHabits, showAll]);
+
+  // 편집모드: 전체 습관을 display_order로 정렬
+  const editSorted = useMemo(() =>
+    [...allChallenges]
+      .sort((a, b) => (a.display_order ?? 0) - (b.display_order ?? 0))
+      .map(c => ({ ...c, challenge_id: c.id }))
+  , [allChallenges]);
 
   const doneCount = useMemo(() => habits.filter(h => h.is_done).length, [habits]);
 
@@ -259,6 +298,10 @@ export default function HomeScreen() {
             <TouchableOpacity style={styles.menuItem} onPress={enterEditMode}>
               <Text style={styles.menuItemText}>순서 편집하기</Text>
             </TouchableOpacity>
+            <View style={styles.menuDivider} />
+            <TouchableOpacity style={styles.menuItem} onPress={() => { setShowAll(v => !v); setHeaderMenuVisible(false); }}>
+              <Text style={styles.menuItemText}>{showAll ? '오늘 습관 보기' : '모든 습관 보기'}</Text>
+            </TouchableOpacity>
           </TouchableOpacity>
         </TouchableOpacity>
       )}
@@ -282,13 +325,15 @@ export default function HomeScreen() {
             onDragEnd={handleReorder}
             contentContainerStyle={styles.habitSection}
             renderItem={({ item, drag, isActive }) => (
-              <HabitItem
-                habit={item}
-                onCheck={handleCheck}
-                editMode
-                drag={drag}
-                isActive={isActive}
-              />
+              <ScaleDecorator activeScale={1.03}>
+                <HabitItem
+                  habit={item}
+                  onCheck={handleCheck}
+                  editMode
+                  drag={drag}
+                  isActive={isActive}
+                />
+              </ScaleDecorator>
             )}
           />
         </View>
@@ -322,10 +367,11 @@ export default function HomeScreen() {
                 <HabitItem
                   key={habit.challenge_id}
                   habit={habit}
-                  onCheck={handleCheck}
-                  onEdit={(h) => { setEditTarget(h); setEditModalVisible(true); }}
-                  onSwipeOpen={handleSwipeOpen}
-                  onSwipeClose={closeCurrentSwipeable}
+                  onCheck={habit.isNonToday ? undefined : handleCheck}
+                  onEdit={habit.isNonToday ? undefined : (h) => { setEditTarget(h); setEditModalVisible(true); }}
+                  onSwipeOpen={habit.isNonToday ? undefined : handleSwipeOpen}
+                  onSwipeClose={habit.isNonToday ? undefined : closeCurrentSwipeable}
+                  disabled={!!habit.isNonToday}
                 />
               ))}
             </View>
@@ -405,9 +451,26 @@ function CharacterHeader({ character, doneCount, habitsLength, xpPopup, xpOpacit
   );
 }
 
-function HabitItem({ habit, onCheck, editMode, onEdit, onSwipeOpen, onSwipeClose, drag, isActive }) {
+function HabitItem({ habit, onCheck, editMode, onEdit, onSwipeOpen, onSwipeClose, drag, isActive, disabled }) {
   const swipeableRef = useRef(null);
   const done = !!habit.is_done;
+
+  if (editMode) {
+    return (
+      <View style={[styles.habitCard, isActive && styles.habitItemDragging]}>
+        <View style={styles.habitCardContent}>
+          <CheckButton done={false} size={44} />
+          <View style={styles.habitInfo}>
+            {habit.habit_time && <Text style={styles.habitTime}>{habit.habit_time}</Text>}
+            <Text style={styles.habitTitle}>{habit.title}</Text>
+          </View>
+          <TouchableOpacity onLongPress={drag} delayLongPress={0} style={styles.dragHandle}>
+            <Text style={styles.dragIcon}>☰</Text>
+          </TouchableOpacity>
+        </View>
+      </View>
+    );
+  }
 
   const renderRightActions = () => (
     <TouchableOpacity
@@ -424,28 +487,21 @@ function HabitItem({ habit, onCheck, editMode, onEdit, onSwipeOpen, onSwipeClose
   return (
     <Swipeable
       ref={swipeableRef}
-      renderRightActions={renderRightActions}
-      enabled={!editMode}
+      renderRightActions={disabled ? undefined : renderRightActions}
       overshootRight={false}
       onSwipeableWillOpen={() => onSwipeOpen?.(swipeableRef.current)}
       onSwipeableClose={() => onSwipeClose?.()}
       containerStyle={[
         styles.habitCard,
-        done && !editMode && styles.habitItemDone,
-        isActive && styles.habitItemDragging,
+        done || disabled ? styles.habitItemDone : null,
       ]}
     >
       <View style={styles.habitCardContent}>
-        <CheckButton done={editMode ? false : done} onPress={editMode ? undefined : () => onCheck(habit.challenge_id, done)} size={44} />
+        <CheckButton done={disabled ? false : done} onPress={disabled ? undefined : () => onCheck(habit.challenge_id, done)} size={44} />
         <View style={styles.habitInfo}>
           {habit.habit_time && <Text style={styles.habitTime}>{habit.habit_time}</Text>}
-          <Text style={[styles.habitTitle, done && !editMode && styles.habitTitleDone]}>{habit.title}</Text>
+          <Text style={[styles.habitTitle, (done && !disabled) && styles.habitTitleDone]}>{habit.title}</Text>
         </View>
-        {editMode && (
-          <TouchableOpacity onPressIn={drag} style={styles.dragHandle}>
-            <Text style={styles.dragIcon}>☰</Text>
-          </TouchableOpacity>
-        )}
       </View>
     </Swipeable>
   );
@@ -516,7 +572,7 @@ const styles = StyleSheet.create({
   },
   fabIcon: { width: 56, height: 56, resizeMode: 'contain' },
 
-  dragHandle: { padding: spacing.sm, justifyContent: 'center' },
+  dragHandle: { padding: spacing.sm, justifyContent: 'center', alignItems: 'center' },
   dragIcon: { fontSize: typography.lg, color: colors.textSub },
   habitItemDragging: {
     opacity: 0.8,
