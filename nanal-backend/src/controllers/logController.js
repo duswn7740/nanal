@@ -128,8 +128,9 @@ async function checkin(req, res) {
 
     // Step 6: XP 지급 (체크인 +10, 연속달성 +5, 전체완료 보너스 +5)
     // 취소 후 재체크인이면 XP 지급 건너뜀
+    let xpGain = 0;
     if (!alreadyGranted) {
-      let xpGain = 10 + (continuedStreak ? 5 : 0);
+      xpGain = 10 + (continuedStreak ? 5 : 0);
 
       // 오늘 활성 습관 전체 완료 여부 확인
       const [[allDoneRow]] = await pool.query(
@@ -192,6 +193,9 @@ async function getToday(req, res) {
   try {
     // LEFT JOIN이므로 오늘 아직 체크인 안 한 챌린지도 포함됨
     // → is_done이 null이면 미완료로 해석
+    // KST 기준 요일 (0=일, 1=월 ... 6=토) — repeat_days와 동일 기준
+    const todayDow = new Date(Date.now() + 9 * 60 * 60 * 1000).getUTCDay();
+
     const [rows] = await pool.query(
       `SELECT
          c.id            AS challenge_id,
@@ -206,8 +210,9 @@ async function getToday(req, res) {
        FROM challenges c
        LEFT JOIN logs l ON l.challenge_id = c.id AND l.log_date = ?
        WHERE c.user_id = ? AND c.is_active = TRUE
+         AND (c.repeat_type = 'daily' OR FIND_IN_SET(?, c.repeat_days))
        ORDER BY c.created_at ASC`,
-      [today, userId]
+      [today, userId, todayDow]
     );
 
     // MariaDB TIME 컬럼은 HH:MM:SS로 반환 → HH:MM으로 정규화

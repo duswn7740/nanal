@@ -1,14 +1,15 @@
 import React, { useState, useCallback, useEffect, useMemo, useRef } from 'react';
 import {
   View, Text, ScrollView, TouchableOpacity,
-  StyleSheet, SafeAreaView, Image, RefreshControl, AppState, Animated,
+  StyleSheet, SafeAreaView, Image, RefreshControl, AppState, Animated, Alert,
 } from 'react-native';
-import { colors, typography, fontFamily, spacing, radius } from '../theme';
+import { Swipeable } from 'react-native-gesture-handler';
+import { useNavigation } from '@react-navigation/native';
+import { colors, typography, fontFamily, spacing, radius, shadow } from '../theme';
 import Header from '../components/Header';
 import Avatar from '../components/Avatar';
 import ProgressBar from '../components/ProgressBar';
 import CheckButton from '../components/CheckButton';
-import Card from '../components/Card';
 import EmptyState from '../components/EmptyState';
 import api from '../api';
 import { getCharacterImage } from '../constants/characterImages';
@@ -19,6 +20,7 @@ import GiftBoxModal from './GiftBoxModal';
 import { rescheduleAllHabits, scheduleHabitNotifications, cancelHabitNotifications } from '../utils/notifications';
 
 export default function HomeScreen() {
+  const navigation = useNavigation();
   const [habits, setHabits] = useState([]);
   const [character, setCharacter] = useState(null);
   const [coins, setCoins] = useState(0);
@@ -26,9 +28,13 @@ export default function HomeScreen() {
   const [error, setError] = useState(false);
   const [modalVisible, setModalVisible] = useState(false);
   const [giftBoxVisible, setGiftBoxVisible] = useState(false);
-  const [editMode, setEditMode] = useState(false);         // 편집모드 on/off
-  const [editTarget, setEditTarget] = useState(null);       // 편집할 습관
+  const [editMode, setEditMode] = useState(false);
+  const [headerMenuVisible, setHeaderMenuVisible] = useState(false);
+  const [editTarget, setEditTarget] = useState(null);
   const [editModalVisible, setEditModalVisible] = useState(false);
+  const originalHabitsRef = useRef(null); // 편집모드 진입 시 순서 스냅샷
+  const currentOpenSwipeable = useRef(null); // 현재 열린 스와이프 카드
+  const [anySwipeOpen, setAnySwipeOpen] = useState(false);
   const [xpPopup, setXpPopup] = useState(null); // 표시할 XP 텍스트 (예: '+10 XP')
   const xpAnim = useRef(new Animated.ValueXY({ x: 0, y: 0 })).current;
   const xpOpacity = useRef(new Animated.Value(0)).current;
@@ -108,7 +114,74 @@ export default function HomeScreen() {
     ]).start(() => setXpPopup(null));
   }, [xpAnim, xpOpacity]);
 
-  // 드래그 완료 시 순서 서버에 저장
+  // 편집모드 진입: 현재 순서 스냅샷
+  const enterEditMode = useCallback(() => {
+    originalHabitsRef.current = habits.map(h => ({ challenge_id: h.challenge_id, display_order: h.display_order }));
+    setEditMode(true);
+    setHeaderMenuVisible(false);
+  }, [habits]);
+
+  // 편집모드 정상 종료 (완료 버튼)
+  const exitEditMode = useCallback(() => {
+    originalHabitsRef.current = null;
+    setEditMode(false);
+  }, []);
+
+  const handleSwipeOpen = useCallback((ref) => {
+    if (currentOpenSwipeable.current && currentOpenSwipeable.current !== ref) {
+      currentOpenSwipeable.current.close();
+    }
+    currentOpenSwipeable.current = ref;
+    setAnySwipeOpen(true);
+  }, []);
+
+  const closeCurrentSwipeable = useCallback(() => {
+    currentOpenSwipeable.current?.close();
+    currentOpenSwipeable.current = null;
+    setAnySwipeOpen(false);
+  }, []);
+
+  // 탭 전환 시 편집모드면 저장 여부 물어보기 + 열린 카드 닫기
+  useEffect(() => {
+    const unsubscribe = navigation.addListener('blur', () => {
+      closeCurrentSwipeable();
+      if (!editMode) return;
+      Alert.alert(
+        '순서 편집 중',
+        '변경된 순서를 저장할까요?',
+        [
+          {
+            text: '저장 안 함',
+            onPress: async () => {
+              const original = originalHabitsRef.current;
+              if (original) {
+                // 원본 순서로 복원
+                setHabits(prev => prev.map(h => {
+                  const o = original.find(r => r.challenge_id === h.challenge_id);
+                  return o ? { ...h, display_order: o.display_order } : h;
+                }));
+                api.put('/challenges/reorder', {
+                  orders: original.map(r => ({ id: r.challenge_id, display_order: r.display_order })),
+                }).catch(() => {});
+              }
+              originalHabitsRef.current = null;
+              setEditMode(false);
+            },
+          },
+          {
+            text: '저장',
+            onPress: () => {
+              originalHabitsRef.current = null;
+              setEditMode(false);
+            },
+          },
+        ]
+      );
+    });
+    return unsubscribe;
+  }, [navigation, editMode, closeCurrentSwipeable]);
+
+  // 드래그 완료 시 순서 서버에 저장 후 자동 새로고침
   const handleReorder = useCallback(async ({ data }) => {
     const reordered = data.map((h, idx) => ({ ...h, display_order: idx }));
     setHabits(reordered);
@@ -116,10 +189,11 @@ export default function HomeScreen() {
       await api.put('/challenges/reorder', {
         orders: reordered.map(h => ({ id: h.challenge_id, display_order: h.display_order })),
       });
+      await fetchToday();
     } catch {
       // 실패해도 로컬 상태는 유지
     }
-  }, []);
+  }, [fetchToday]);
 
   const handleCheck = useCallback(async (challengeId, isDone) => {
     try {
@@ -140,7 +214,7 @@ export default function HomeScreen() {
     }
   }, [showXpPopup]);
 
-  // 미완료(시간없는것→시간있는것) → 완료 순 정렬
+  // 일반모드: 미완료 → 완료 순 정렬
   const sorted = useMemo(() => [...habits].sort((a, b) => {
     if (a.is_done !== b.is_done) return a.is_done ? 1 : -1;
     if (!a.habit_time && b.habit_time) return -1;
@@ -149,6 +223,11 @@ export default function HomeScreen() {
     return (a.display_order ?? 0) - (b.display_order ?? 0);
   }), [habits]);
 
+  // 편집모드: display_order만으로 정렬 (달성 여부 무시)
+  const editSorted = useMemo(() => [...habits].sort((a, b) =>
+    (a.display_order ?? 0) - (b.display_order ?? 0)
+  ), [habits]);
+
   const doneCount = useMemo(() => habits.filter(h => h.is_done).length, [habits]);
 
   return (
@@ -156,11 +235,34 @@ export default function HomeScreen() {
       <Header
         title="나날 - 습관트래커"
         right={
-          <TouchableOpacity onPress={() => setEditMode(prev => !prev)} style={{ padding: spacing.xs }}>
-            <Text style={styles.editModeBtn}>{editMode ? '완료' : '⋮'}</Text>
-          </TouchableOpacity>
+          editMode ? (
+            <TouchableOpacity onPress={exitEditMode} style={{ padding: spacing.xs }}>
+              <Text style={styles.editModeBtn}>완료</Text>
+            </TouchableOpacity>
+          ) : (
+            <TouchableOpacity onPress={() => setHeaderMenuVisible(v => !v)} style={{ padding: spacing.xs }}>
+              <Text style={styles.editModeBtn}>⋮</Text>
+            </TouchableOpacity>
+          )
         }
       />
+
+      {/* 스와이프 열린 상태에서 다른 곳 터치 시 닫기 */}
+      {anySwipeOpen && (
+        <TouchableOpacity style={styles.swipeOverlay} activeOpacity={1} onPress={closeCurrentSwipeable} />
+      )}
+
+      {/* ⋮ 드롭다운 메뉴 */}
+      {headerMenuVisible && (
+        <TouchableOpacity style={styles.menuOverlay} activeOpacity={1} onPress={() => setHeaderMenuVisible(false)}>
+          <TouchableOpacity activeOpacity={1} style={[styles.menuCard, styles.headerMenuCard]}>
+            <TouchableOpacity style={styles.menuItem} onPress={enterEditMode}>
+              <Text style={styles.menuItemText}>순서 편집하기</Text>
+            </TouchableOpacity>
+          </TouchableOpacity>
+        </TouchableOpacity>
+      )}
+
 
       {error ? (
         <View style={styles.center}>
@@ -170,12 +272,12 @@ export default function HomeScreen() {
             </TouchableOpacity>
           </EmptyState>
         </View>
-      ) : editMode && sorted.length > 0 ? (
+      ) : editMode && editSorted.length > 0 ? (
         /* 편집모드: CharacterHeader는 FlatList 밖, 드래그 리스트만 FlatList */
         <View style={styles.scroll}>
           <CharacterHeader character={character} doneCount={doneCount} habitsLength={habits.length} xpPopup={xpPopup} xpOpacity={xpOpacity} xpAnim={xpAnim} />
           <DraggableFlatList
-            data={sorted}
+            data={editSorted}
             keyExtractor={item => String(item.challenge_id)}
             onDragEnd={handleReorder}
             contentContainerStyle={styles.habitSection}
@@ -184,10 +286,6 @@ export default function HomeScreen() {
                 habit={item}
                 onCheck={handleCheck}
                 editMode
-                onLongPress={() => {
-                  setEditTarget(item);
-                  setEditModalVisible(true);
-                }}
                 drag={drag}
                 isActive={isActive}
               />
@@ -221,7 +319,14 @@ export default function HomeScreen() {
           ) : (
             <View style={styles.habitSection}>
               {sorted.map(habit => (
-                <HabitItem key={habit.challenge_id} habit={habit} onCheck={handleCheck} />
+                <HabitItem
+                  key={habit.challenge_id}
+                  habit={habit}
+                  onCheck={handleCheck}
+                  onEdit={(h) => { setEditTarget(h); setEditModalVisible(true); }}
+                  onSwipeOpen={handleSwipeOpen}
+                  onSwipeClose={closeCurrentSwipeable}
+                />
               ))}
             </View>
           )}
@@ -274,18 +379,20 @@ export default function HomeScreen() {
 function CharacterHeader({ character, doneCount, habitsLength, xpPopup, xpOpacity, xpAnim }) {
   return (
     <View style={styles.characterSection}>
-      {xpPopup && (
-        <Animated.Text style={[
-          styles.xpPopup,
-          { opacity: xpOpacity, transform: xpAnim.getTranslateTransform() },
-        ]}>
-          {xpPopup}
-        </Animated.Text>
-      )}
-      <Avatar
-        size="lg"
-        image={character ? getCharacterImage(character.name, character.level) : null}
-      />
+      <View style={styles.avatarWrapper}>
+        {xpPopup && (
+          <Animated.Text style={[
+            styles.xpPopup,
+            { opacity: xpOpacity, transform: xpAnim.getTranslateTransform() },
+          ]}>
+            {xpPopup}
+          </Animated.Text>
+        )}
+        <Avatar
+          size="lg"
+          image={character ? getCharacterImage(character.name, character.level) : null}
+        />
+      </View>
       <View style={styles.expWrapper}>
         <ProgressBar
           value={doneCount}
@@ -298,31 +405,49 @@ function CharacterHeader({ character, doneCount, habitsLength, xpPopup, xpOpacit
   );
 }
 
-function HabitItem({ habit, onCheck, editMode, onLongPress, drag, isActive }) {
+function HabitItem({ habit, onCheck, editMode, onEdit, onSwipeOpen, onSwipeClose, drag, isActive }) {
+  const swipeableRef = useRef(null);
   const done = !!habit.is_done;
+
+  const renderRightActions = () => (
+    <TouchableOpacity
+      style={styles.swipeAction}
+      onPress={() => {
+        swipeableRef.current?.close();
+        onEdit(habit);
+      }}
+    >
+      <Image source={require('../../assets/icons/edit.png')} style={styles.swipeActionIcon} />
+    </TouchableOpacity>
+  );
+
   return (
-    <Card withShadow style={[done && !editMode && styles.habitItemDone, isActive && styles.habitItemDragging]}>
-      <TouchableOpacity
-        onLongPress={editMode ? onLongPress : undefined}
-        delayLongPress={300}
-        activeOpacity={editMode ? 0.7 : 1}
-      >
-        <View style={styles.habitItem}>
-          {/* 편집모드가 아닐 때만 체크버튼 활성화 */}
-          <CheckButton done={done} onPress={editMode ? undefined : () => onCheck(habit.challenge_id, done)} size={44} />
-          <View style={styles.habitInfo}>
-            {habit.habit_time && <Text style={styles.habitTime}>{habit.habit_time}</Text>}
-            <Text style={[styles.habitTitle, done && !editMode && styles.habitTitleDone]}>{habit.title}</Text>
-          </View>
-          {/* 편집모드일 때 드래그 핸들(삼선) 표시 */}
-          {editMode && (
-            <TouchableOpacity onPressIn={drag} style={styles.dragHandle}>
-              <Text style={styles.dragIcon}>☰</Text>
-            </TouchableOpacity>
-          )}
+    <Swipeable
+      ref={swipeableRef}
+      renderRightActions={renderRightActions}
+      enabled={!editMode}
+      overshootRight={false}
+      onSwipeableWillOpen={() => onSwipeOpen?.(swipeableRef.current)}
+      onSwipeableClose={() => onSwipeClose?.()}
+      containerStyle={[
+        styles.habitCard,
+        done && !editMode && styles.habitItemDone,
+        isActive && styles.habitItemDragging,
+      ]}
+    >
+      <View style={styles.habitCardContent}>
+        <CheckButton done={editMode ? false : done} onPress={editMode ? undefined : () => onCheck(habit.challenge_id, done)} size={44} />
+        <View style={styles.habitInfo}>
+          {habit.habit_time && <Text style={styles.habitTime}>{habit.habit_time}</Text>}
+          <Text style={[styles.habitTitle, done && !editMode && styles.habitTitleDone]}>{habit.title}</Text>
         </View>
-      </TouchableOpacity>
-    </Card>
+        {editMode && (
+          <TouchableOpacity onPressIn={drag} style={styles.dragHandle}>
+            <Text style={styles.dragIcon}>☰</Text>
+          </TouchableOpacity>
+        )}
+      </View>
+    </Swipeable>
   );
 }
 
@@ -341,8 +466,13 @@ const styles = StyleSheet.create({
     paddingHorizontal: spacing.xl,
     gap: spacing.md,
   },
+  avatarWrapper: {
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
   xpPopup: {
     position: 'absolute',
+    top: -28,
     fontSize: typography.lg,
     fontFamily: fontFamily.bold,
     color: colors.lavenderDark,
@@ -356,6 +486,21 @@ const styles = StyleSheet.create({
     gap: spacing.sm,
   },
 
+  habitCard: {
+    backgroundColor: colors.surface,
+    borderRadius: radius.lg,
+    borderWidth: 1,
+    borderColor: colors.border,
+    overflow: 'hidden',
+    ...shadow.sm,
+  },
+  habitCardContent: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing.md,
+    padding: spacing.md,
+    backgroundColor: colors.surface,
+  },
   habitItem: { flexDirection: 'row', alignItems: 'center', gap: spacing.md },
   habitItemDone: { opacity: 0.5 },
   habitInfo: { flex: 1, flexDirection: 'row', alignItems: 'center', gap: spacing.sm },
@@ -371,19 +516,48 @@ const styles = StyleSheet.create({
   },
   fabIcon: { width: 56, height: 56, resizeMode: 'contain' },
 
-  dragHandle: {
-    padding: spacing.sm,
-    justifyContent: 'center',
-  },
-  dragIcon: {
-    fontSize: typography.lg,
-    color: colors.textSub,
-  },
+  dragHandle: { padding: spacing.sm, justifyContent: 'center' },
+  dragIcon: { fontSize: typography.lg, color: colors.textSub },
   habitItemDragging: {
     opacity: 0.8,
     elevation: 8,
   },
   draggableList: { flex: 1 },
+
+  swipeOverlay: {
+    position: 'absolute', top: 0, left: 0, right: 0, bottom: 0,
+    zIndex: 10,
+  },
+  menuOverlay: {
+    position: 'absolute', top: 0, left: 0, right: 0, bottom: 0,
+    zIndex: 100,
+  },
+  menuCard: {
+    position: 'absolute', right: spacing.md,
+    backgroundColor: colors.surface,
+    borderRadius: radius.lg,
+    borderWidth: 1, borderColor: colors.border,
+    minWidth: 160,
+    elevation: 8,
+    shadowColor: '#000', shadowOpacity: 0.12, shadowRadius: 8, shadowOffset: { width: 0, height: 2 },
+  },
+  menuItem: {
+    paddingHorizontal: spacing.lg,
+    paddingVertical: spacing.md,
+  },
+  menuItemText: {
+    fontSize: typography.md, fontFamily: fontFamily.regular, color: colors.textMain,
+  },
+  menuDivider: { height: 1, backgroundColor: colors.border, marginHorizontal: spacing.sm },
+  headerMenuCard: { top: 52 },
+
+  swipeAction: {
+    width: 64,
+    justifyContent: 'center',
+    alignItems: 'center',
+    backgroundColor: colors.lavenderLight,
+  },
+  swipeActionIcon: { width: 32, height: 32, resizeMode: 'contain' },
 
   retryButton: {
     marginTop: spacing.md,

@@ -10,21 +10,20 @@ import { colors, typography, fontFamily, radius, spacing } from '../theme';
  *   <ProgressBar value={350} max={520} label="레벨 4" />
  *   <ProgressBar value={75} max={100} showPercent />
  */
-export default function ProgressBar({ value = 0, max = 100, label, showPercent = false }) {
-  // 0~1 사이로 클램핑
+export default function ProgressBar({ value = 0, max = 100, label, showPercent = false, hideValue = false }) {
   const ratio = Math.min(Math.max(value / max, 0), 1);
   const percent = Math.round(ratio * 100);
 
   return (
     <View style={styles.wrapper}>
-      {/* 상단 라벨 + 수치 */}
       {(label || showPercent) && (
         <View style={styles.header}>
           {label && <Text style={styles.label}>{label}</Text>}
-          {showPercent
-            ? <Text style={styles.value}>{percent}%</Text>
-            : <Text style={styles.value}>{value} / {max}</Text>
-          }
+          {!hideValue && (
+            showPercent
+              ? <Text style={styles.value}>{percent}%</Text>
+              : <Text style={styles.value}>{value} / {max}</Text>
+          )}
         </View>
       )}
 

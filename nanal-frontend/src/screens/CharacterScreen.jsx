@@ -1,8 +1,12 @@
 import React, { useState, useCallback } from 'react';
 import {
   View, Text, ScrollView, TouchableOpacity, Modal,
-  SafeAreaView, StyleSheet, ActivityIndicator, Alert,
+  SafeAreaView, StyleSheet, ActivityIndicator, Alert, Dimensions,
 } from 'react-native';
+
+const GRID_PADDING = 16; // spacing.md
+const GRID_GAP = 8;      // spacing.sm
+const CARD_WIDTH = (Dimensions.get('window').width - GRID_PADDING * 2 - GRID_GAP * 2) / 3;
 import { useFocusEffect } from '@react-navigation/native';
 import { colors, typography, fontFamily, spacing, radius } from '../theme';
 import Header from '../components/Header';
@@ -151,7 +155,7 @@ export default function CharacterScreen() {
                   <Text style={styles.levelBadgeText}>Lv.{active.level}</Text>
                 </View>
               </View>
-              <ProgressBar value={Math.round(expProgress * 100)} max={100} label={expLabel} />
+              <ProgressBar value={active.exp} max={LEVEL_THRESHOLDS[active.level] ?? active.exp} label={expLabel} hideValue />
             </View>
           </View>
         )}
@@ -287,9 +291,9 @@ const styles = StyleSheet.create({
     paddingHorizontal: spacing.xs,
   },
 
-  grid: { flexDirection: 'row', flexWrap: 'wrap', gap: spacing.sm },
+  grid: { flexDirection: 'row', flexWrap: 'wrap', gap: GRID_GAP },
   charCard: {
-    width: '30%', alignItems: 'center', gap: spacing.xs,
+    width: CARD_WIDTH, alignItems: 'center', gap: spacing.xs,
     backgroundColor: colors.surface, borderRadius: radius.lg,
     borderWidth: 1.5, borderColor: colors.border, padding: spacing.sm,
   },
