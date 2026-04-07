@@ -36,7 +36,6 @@ export default function HomeScreen() {
   const originalHabitsRef = useRef(null);
   const allChallengesRef = useRef([]);
   const currentOpenSwipeable = useRef(null); // 현재 열린 스와이프 카드
-  const [anySwipeOpen, setAnySwipeOpen] = useState(false);
   const [xpModal, setXpModal] = useState(null); // { xp, isAllDone }
 
   const fetchToday = useCallback(async () => {
@@ -118,13 +117,11 @@ export default function HomeScreen() {
       currentOpenSwipeable.current.close();
     }
     currentOpenSwipeable.current = ref;
-    setAnySwipeOpen(true);
   }, []);
 
   const closeCurrentSwipeable = useCallback(() => {
     currentOpenSwipeable.current?.close();
     currentOpenSwipeable.current = null;
-    setAnySwipeOpen(false);
   }, []);
 
   // 편집모드일 때 뒤로가기 버튼 → 앱 종료 대신 편집모드 종료
@@ -219,7 +216,6 @@ export default function HomeScreen() {
       } else {
         const { data } = await api.post('/logs/checkin', { challenge_id: challengeId });
         if (data.xpGain > 0) {
-          const allDone = data.xpGain >= 15; // 10(완료) + 5(전체완료 or 연속) 이상이면 보너스 있음
           setXpModal({ xp: data.xpGain, allDone: data.xpGain >= 15 });
         }
       }
@@ -278,10 +274,6 @@ export default function HomeScreen() {
         }
       />
 
-      {/* 스와이프 열린 상태에서 다른 곳 터치 시 닫기 */}
-      {anySwipeOpen && (
-        <TouchableOpacity style={styles.swipeOverlay} activeOpacity={1} onPress={closeCurrentSwipeable} />
-      )}
 
       {/* ⋮ 드롭다운 메뉴 */}
       {headerMenuVisible && (
@@ -335,6 +327,7 @@ export default function HomeScreen() {
           style={styles.scroll}
           contentContainerStyle={styles.scrollContent}
           showsVerticalScrollIndicator={false}
+          onScrollBeginDrag={closeCurrentSwipeable}
           refreshControl={
             <RefreshControl
               refreshing={refreshing}
@@ -360,9 +353,8 @@ export default function HomeScreen() {
                   key={habit.challenge_id}
                   habit={habit}
                   onCheck={habit.isNonToday ? undefined : handleCheck}
-                  onEdit={habit.isNonToday ? undefined : (h) => { setEditTarget(h); setEditModalVisible(true); }}
-                  onSwipeOpen={habit.isNonToday ? undefined : handleSwipeOpen}
-                  onSwipeClose={habit.isNonToday ? undefined : closeCurrentSwipeable}
+                  onEdit={(h) => { setEditTarget(h); setEditModalVisible(true); }}
+                  onSwipeOpen={handleSwipeOpen}
                   disabled={!!habit.isNonToday}
                 />
               ))}
@@ -468,7 +460,7 @@ function XpModal({ visible, xp, allDone, onClose, onWatchAd }) {
   );
 }
 
-function HabitItem({ habit, onCheck, editMode, onEdit, onSwipeOpen, onSwipeClose, drag, isActive, disabled }) {
+function HabitItem({ habit, onCheck, editMode, onEdit, onSwipeOpen, drag, isActive, disabled }) {
   const swipeableRef = useRef(null);
   const done = !!habit.is_done;
 
@@ -501,10 +493,9 @@ function HabitItem({ habit, onCheck, editMode, onEdit, onSwipeOpen, onSwipeClose
   return (
     <Swipeable
       ref={swipeableRef}
-      renderRightActions={disabled ? undefined : renderRightActions}
+      renderRightActions={renderRightActions}
       overshootRight={false}
       onSwipeableWillOpen={() => onSwipeOpen?.(swipeableRef.current)}
-      onSwipeableClose={() => onSwipeClose?.()}
       containerStyle={[styles.habitCard, (done || disabled) && styles.habitItemDone]}
     >
       <View style={styles.habitCardContent}>
@@ -579,10 +570,6 @@ const styles = StyleSheet.create({
   },
   draggableList: { flex: 1 },
 
-  swipeOverlay: {
-    position: 'absolute', top: 0, left: 0, right: 0, bottom: 0,
-    zIndex: 10,
-  },
   menuOverlay: {
     position: 'absolute', top: 0, left: 0, right: 0, bottom: 0,
     zIndex: 100,

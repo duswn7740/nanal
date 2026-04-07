@@ -127,25 +127,24 @@ async function checkin(req, res) {
       [userId]
     );
 
-    // Step 6: XP 지급 (하루 첫 체크인 +10, 연속달성 +5, 전체완료 보너스 +5)
+    // Step 6: XP 지급 (하루 첫 체크인 +10, 전체완료 보너스 +5)
     // 취소 후 재체크인이면 XP 지급 건너뜀
     let xpGain = 0;
     if (!alreadyGranted) {
-      // 오늘 이미 다른 습관에서 XP를 받았는지 확인 (하루 첫 체크인에만 +10+연속보너스 지급)
-      const [[alreadyXpRow]] = await pool.query(
-        `SELECT COUNT(*) AS cnt
-         FROM logs l
-         JOIN challenges c ON c.id = l.challenge_id
-         WHERE c.user_id = ? AND l.log_date = ? AND l.xp_granted = TRUE AND l.challenge_id != ?`,
-        [userId, today, challenge_id]
+      const [[userRow]] = await pool.query(
+        'SELECT last_checkin_date, last_all_done_date FROM users WHERE id = ?',
+        [userId]
       );
-      const isFirstCheckinToday = alreadyXpRow.cnt === 0;
+      const lastCheckinDate = userRow.last_checkin_date ? normalizeDateStr(userRow.last_checkin_date) : null;
+      const lastAllDoneDate = userRow.last_all_done_date ? normalizeDateStr(userRow.last_all_done_date) : null;
 
-      if (isFirstCheckinToday) {
-        xpGain = 10 + (continuedStreak ? 5 : 0);
+      // 오늘 첫 체크인이면 +10
+      if (lastCheckinDate !== today) {
+        xpGain += 10;
+        await pool.query('UPDATE users SET last_checkin_date = ? WHERE id = ?', [today, userId]);
       }
 
-      // 오늘 스케줄된 습관 전체 완료 여부 확인 (오늘 요일에 해당하는 습관만 카운트)
+      // 오늘 스케줄된 습관 전체 완료 여부 확인 (오늘 요일에 해당하는 습관만)
       const [[allDoneRow]] = await pool.query(
         `SELECT
            COUNT(*) AS total,
@@ -156,22 +155,11 @@ async function checkin(req, res) {
            AND (c.repeat_type = 'daily' OR FIND_IN_SET(?, c.repeat_days))`,
         [today, userId, todayDow]
       );
-
       const allDone = allDoneRow.total > 0 && allDoneRow.total === allDoneRow.done;
 
-      if (allDone) {
-        const [[userRow]] = await pool.query(
-          'SELECT last_all_done_date FROM users WHERE id = ?',
-          [userId]
-        );
-        const lastDate = userRow.last_all_done_date
-          ? normalizeDateStr(userRow.last_all_done_date)
-          : null;
-
-        if (lastDate !== today) {
-          xpGain += 5;
-          await pool.query('UPDATE users SET last_all_done_date = ? WHERE id = ?', [today, userId]);
-        }
+      if (allDone && lastAllDoneDate !== today) {
+        xpGain += 5;
+        await pool.query('UPDATE users SET last_all_done_date = ? WHERE id = ?', [today, userId]);
       }
 
       if (xpGain > 0) {
@@ -179,10 +167,10 @@ async function checkin(req, res) {
         await checkUnlocks(userId);
       }
 
-      // XP 지급 완료 표시 + 지급량 저장
+      // XP 지급 완료 표시
       await pool.query(
-        'UPDATE logs SET xp_granted = TRUE, xp_amount = ? WHERE challenge_id = ? AND log_date = ?',
-        [xpGain, challenge_id, today]
+        'UPDATE logs SET xp_granted = TRUE WHERE challenge_id = ? AND log_date = ?',
+        [challenge_id, today]
       );
     }
 
@@ -319,32 +307,68 @@ async function uncheck(req, res) {
 
     // 오늘 완료된 로그 확인
     const [logs] = await pool.query(
-      'SELECT id, xp_amount FROM logs WHERE challenge_id = ? AND log_date = ? AND is_done = TRUE',
+      'SELECT id FROM logs WHERE challenge_id = ? AND log_date = ? AND is_done = TRUE',
       [challenge_id, today]
     );
     if (logs.length === 0) {
       return res.status(409).json({ message: '오늘 완료된 기록이 없습니다.' });
     }
 
-    // 체크인 취소: is_done = false, xp 초기화
+    // 체크인 취소: is_done = false
     await pool.query(
-      'UPDATE logs SET is_done = FALSE, done_at = NULL, memo = NULL, xp_granted = FALSE, xp_amount = 0 WHERE id = ?',
+      'UPDATE logs SET is_done = FALSE, done_at = NULL, memo = NULL, xp_granted = FALSE WHERE id = ?',
       [logs[0].id]
     );
 
-    // XP 환수
-    const xpAmount = logs[0].xp_amount ?? 0;
-    if (xpAmount > 0) {
-      await pool.query(
-        `UPDATE user_characters
-         SET exp = GREATEST(0, exp - ?)
-         WHERE user_id = ? AND is_active = 1 AND is_purchased = TRUE`,
-        [xpAmount, userId]
+    // XP 환수: 현재 users 상태 기준으로 필요한 만큼만 차감
+    const todayDow = new Date(Date.now() + 9 * 60 * 60 * 1000).getUTCDay();
+    const [[userRow]] = await pool.query(
+      'SELECT last_checkin_date, last_all_done_date FROM users WHERE id = ?',
+      [userId]
+    );
+    const lastCheckinDate = userRow.last_checkin_date ? normalizeDateStr(userRow.last_checkin_date) : null;
+    const lastAllDoneDate = userRow.last_all_done_date ? normalizeDateStr(userRow.last_all_done_date) : null;
+
+    let xpRevoke = 0;
+
+    // 전체완료 보너스 환수: 취소 후 더이상 전체완료가 아니면 -5
+    if (lastAllDoneDate === today) {
+      const [[allDoneRow]] = await pool.query(
+        `SELECT
+           COUNT(*) AS total,
+           SUM(CASE WHEN l.is_done = TRUE THEN 1 ELSE 0 END) AS done
+         FROM challenges c
+         LEFT JOIN logs l ON l.challenge_id = c.id AND l.log_date = ?
+         WHERE c.user_id = ? AND c.is_active = TRUE
+           AND (c.repeat_type = 'daily' OR FIND_IN_SET(?, c.repeat_days))`,
+        [today, userId, todayDow]
       );
-      // 전체완료 보너스 받았을 수 있으니 오늘 날짜 리셋 → 다시 전체완료 시 보너스 재지급 가능
-      await pool.query(
-        'UPDATE users SET last_all_done_date = NULL WHERE id = ? AND last_all_done_date = ?',
+      const stillAllDone = allDoneRow.total > 0 && allDoneRow.total === allDoneRow.done;
+      if (!stillAllDone) {
+        xpRevoke += 5;
+        await pool.query('UPDATE users SET last_all_done_date = NULL WHERE id = ?', [userId]);
+      }
+    }
+
+    // 첫 체크인 XP 환수: 오늘 완료된 습관이 하나도 없으면 -10
+    if (lastCheckinDate === today) {
+      const [[doneCountRow]] = await pool.query(
+        `SELECT COUNT(*) AS cnt
+         FROM logs l
+         JOIN challenges c ON c.id = l.challenge_id
+         WHERE c.user_id = ? AND l.log_date = ? AND l.is_done = TRUE`,
         [userId, today]
+      );
+      if (doneCountRow.cnt === 0) {
+        xpRevoke += 10;
+        await pool.query('UPDATE users SET last_checkin_date = NULL WHERE id = ?', [userId]);
+      }
+    }
+
+    if (xpRevoke > 0) {
+      await pool.query(
+        'UPDATE user_characters SET exp = GREATEST(0, exp - ?) WHERE user_id = ? AND is_active = 1 AND is_purchased = TRUE',
+        [xpRevoke, userId]
       );
     }
 

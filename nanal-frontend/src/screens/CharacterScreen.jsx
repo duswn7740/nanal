@@ -26,9 +26,8 @@ function getLevelProgress(exp, level) {
 }
 
 const XP_INFO = [
-  { label: '습관 완료', xp: '+10 XP' },
+  { label: '오늘 첫 습관 완료', xp: '+10 XP' },
   { label: '모든 습관 완료', xp: '+5 XP' },
-  { label: '연속 달성 보너스', xp: '+5 XP' },
 ];
 
 export default function CharacterScreen() {
