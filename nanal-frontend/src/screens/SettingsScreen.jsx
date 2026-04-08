@@ -9,6 +9,7 @@ import Input from '../components/Input';
 import Button from '../components/Button';
 import { useAuth } from '../context/AuthContext';
 import api from '../api';
+import PolicyModal from './PolicyModal';
 
 function SettingRow({ label, onPress, danger = false }) {
   return (
@@ -25,6 +26,7 @@ export default function SettingsScreen() {
   const [nickname, setNickname] = useState('');
   const [nicknameError, setNicknameError] = useState('');
   const [loading, setLoading] = useState(false);
+  const [policyType, setPolicyType] = useState(null); // 'terms' | 'privacy' | null
 
   const handleLogout = () => {
     Alert.alert('로그아웃', '정말 로그아웃할까요?', [
@@ -74,14 +76,20 @@ export default function SettingsScreen() {
         <View style={styles.section}>
           <Text style={styles.sectionTitle}>정보</Text>
           <View style={styles.card}>
-            <SettingRow label="이용약관" onPress={() => {}} />
+            <SettingRow label="이용약관" onPress={() => setPolicyType('terms')} />
             <View style={styles.divider} />
-            <SettingRow label="개인정보처리방침" onPress={() => {}} />
+            <SettingRow label="개인정보처리방침" onPress={() => setPolicyType('privacy')} />
           </View>
         </View>
 
         <Text style={styles.version}>나날 v1.0.0</Text>
       </ScrollView>
+
+      <PolicyModal
+        visible={policyType !== null}
+        type={policyType}
+        onClose={() => setPolicyType(null)}
+      />
 
       {/* 닉네임 변경 모달 */}
       <Modal visible={nicknameModal} transparent animationType="fade" onRequestClose={() => setNicknameModal(false)}>

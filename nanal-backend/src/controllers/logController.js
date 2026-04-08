@@ -155,7 +155,7 @@ async function checkin(req, res) {
            AND (c.repeat_type = 'daily' OR FIND_IN_SET(?, c.repeat_days))`,
         [today, userId, todayDow]
       );
-      const allDone = allDoneRow.total > 0 && allDoneRow.total === allDoneRow.done;
+      const allDone = allDoneRow.total > 0 && Number(allDoneRow.total) === Number(allDoneRow.done);
 
       if (allDone && lastAllDoneDate !== today) {
         xpGain += 5;

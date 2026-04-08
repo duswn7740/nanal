@@ -1,15 +1,15 @@
 {
   "expo": {
-    "name": "nanal",
+    "name": "나날-습관트래커",
     "slug": "nanal",
     "version": "1.0.0",
     "orientation": "portrait",
-    "icon": "./assets/avatar/flower_lv4.png",
+    "icon": "./assets/icons/mainicon.png",
     "userInterfaceStyle": "light",
     "splash": {
-      "image": "./assets/splash-icon.png",
+      "image": "./assets/icons/mainicon.png",
       "resizeMode": "contain",
-      "backgroundColor": "#ffffff"
+      "backgroundColor": "#ede9e7"
     },
     "ios": {
       "supportsTablet": true
@@ -17,7 +17,7 @@
     "android": {
       "adaptiveIcon": {
         "backgroundColor": "#F9F9F9",
-        "foregroundImage": "./assets/avatar/flower_lv4.png"
+        "foregroundImage": "./assets/icons/mainicon.png"
       },
       "package": "com.y83849455.nanal",
       "usesCleartextTraffic": true,

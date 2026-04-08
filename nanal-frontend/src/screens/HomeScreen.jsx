@@ -353,7 +353,11 @@ export default function HomeScreen() {
                   key={habit.challenge_id}
                   habit={habit}
                   onCheck={habit.isNonToday ? undefined : handleCheck}
-                  onEdit={(h) => { setEditTarget(h); setEditModalVisible(true); }}
+                  onEdit={(h) => {
+                    const full = allChallenges.find(c => c.id === h.challenge_id);
+                    setEditTarget({ ...h, ...(full ?? {}) });
+                    setEditModalVisible(true);
+                  }}
                   onSwipeOpen={handleSwipeOpen}
                   disabled={!!habit.isNonToday}
                 />

@@ -1,33 +1,52 @@
-import React, { useState } from 'react';
+import React, { useState, useMemo } from 'react';
 import {
   View, Text, Modal, StyleSheet, TouchableOpacity,
-  SafeAreaView, Image, ActivityIndicator,
+  Image, ActivityIndicator,
 } from 'react-native';
 import { colors, typography, fontFamily, spacing, radius } from '../theme';
 import api from '../api';
 
-// 보상 타입별 표시 텍스트
+const GIFT_IMAGES = [
+  require('../../assets/icons/gift1.png'),
+  require('../../assets/icons/gift2.png'),
+  require('../../assets/icons/gift3.png'),
+  require('../../assets/icons/gift4.png'),
+  require('../../assets/icons/gift5.png'),
+];
+
 function rewardLabel(reward) {
   if (!reward) return '';
   if (reward.type === 'xp') return `+${reward.amount} XP`;
-  return `+${reward.amount} 코인 🪙`;
+  return `+${reward.amount} 코인`;
+}
+
+// 5개 중 3개 랜덤 선택 + 순서 셔플
+function pickBoxes() {
+  const indices = [0, 1, 2, 3, 4];
+  for (let i = indices.length - 1; i > 0; i--) {
+    const j = Math.floor(Math.random() * (i + 1));
+    [indices[i], indices[j]] = [indices[j], indices[i]];
+  }
+  return indices.slice(0, 3);
 }
 
 export default function GiftBoxModal({ visible, onClose, onCoinsUpdated }) {
   const [reward, setReward] = useState(null);
+  const [selectedIdx, setSelectedIdx] = useState(null); // 선택한 상자 인덱스 (0,1,2)
   const [adUsed, setAdUsed] = useState(false);
   const [loading, setLoading] = useState(false);
-  const opened = reward !== null;
 
-  const handleOpen = async () => {
-    if (loading) return;
+  const boxes = useMemo(() => pickBoxes(), [visible]); // 열릴 때마다 새로 선택
+
+  const handleOpen = async (idx) => {
+    if (loading || reward) return;
+    setSelectedIdx(idx);
     setLoading(true);
     try {
       const { data } = await api.post('/box/open');
       setReward(data.reward);
       onCoinsUpdated?.(data.coins);
     } catch (err) {
-      // 이미 열었거나 서버 오류
       const msg = err.response?.data?.message ?? '오류가 발생했어요.';
       setReward({ type: 'error', message: msg });
     } finally {
@@ -39,86 +58,83 @@ export default function GiftBoxModal({ visible, onClose, onCoinsUpdated }) {
     if (loading || adUsed) return;
     setLoading(true);
     try {
-      // 실제 광고 SDK 연동 시 여기서 광고 시청 완료 후 호출
       const { data } = await api.post('/box/ad', { reward });
       setAdUsed(true);
       onCoinsUpdated?.(data.coins);
-    } catch (err) {
-      // 이미 광고 보상 받은 경우 등
+    } catch {
     } finally {
       setLoading(false);
     }
   };
 
   const handleClose = () => {
-    // 닫을 때 상태 초기화 (다음 날 다시 열릴 때를 위해)
     setReward(null);
+    setSelectedIdx(null);
     setAdUsed(false);
     onClose();
   };
+
+  const opened = reward !== null;
 
   return (
     <Modal visible={visible} transparent animationType="fade" onRequestClose={handleClose}>
       <View style={styles.overlay}>
         <View style={styles.card}>
+          <Text style={styles.title}>오늘의 선물상자 🎁</Text>
+          {!opened && <Text style={styles.sub}>상자 하나를 골라보세요!</Text>}
 
-          {!opened ? (
-            // 상자 열기 전
-            <>
-              <Text style={styles.title}>오늘의 선물상자 🎁</Text>
-              <Text style={styles.sub}>상자를 열어 보상을 받아요!</Text>
-
-              <TouchableOpacity
-                style={styles.boxButton}
-                onPress={handleOpen}
-                activeOpacity={0.8}
-                disabled={loading}
-              >
-                {loading
-                  ? <ActivityIndicator color={colors.lavenderDark} />
-                  : <Text style={styles.boxEmoji}>🎁</Text>
-                }
-              </TouchableOpacity>
-
-              <TouchableOpacity style={styles.closeLink} onPress={handleClose}>
-                <Text style={styles.closeLinkText}>나중에</Text>
-              </TouchableOpacity>
-            </>
-          ) : (
-            // 상자 열고 난 후
-            <>
-              <Text style={styles.title}>
-                {reward?.type === 'error' ? '😢' : '🎉'}
-              </Text>
-              <Text style={styles.rewardText}>
-                {reward?.type === 'error' ? reward.message : rewardLabel(reward)}
-              </Text>
-
-              {/* 광고 시청으로 2배 획득 (에러가 아닐 때만) */}
-              {reward?.type !== 'error' && !adUsed && (
+          {/* 상자 3개 */}
+          <View style={styles.boxRow}>
+            {boxes.map((imgIdx, i) => {
+              const isSelected = selectedIdx === i;
+              const isDimmed = opened && !isSelected;
+              return (
                 <TouchableOpacity
-                  style={styles.adButton}
-                  onPress={handleAd}
-                  activeOpacity={0.8}
-                  disabled={loading}
+                  key={i}
+                  onPress={() => handleOpen(i)}
+                  disabled={opened || loading}
+                  activeOpacity={0.75}
+                  style={[styles.boxBtn, isDimmed && styles.boxBtnDimmed]}
                 >
-                  {loading
-                    ? <ActivityIndicator color={colors.surface} size="small" />
-                    : <Text style={styles.adButtonText}>📺 광고 보고 2배 획득!</Text>
+                  {loading && isSelected
+                    ? <ActivityIndicator color={colors.lavenderDark} />
+                    : <Image source={GIFT_IMAGES[imgIdx]} style={styles.boxImage} />
                   }
                 </TouchableOpacity>
-              )}
+              );
+            })}
+          </View>
 
-              {adUsed && (
-                <Text style={styles.adDoneText}>✓ 광고 보상 획득 완료!</Text>
-              )}
+          {/* 보상 결과 */}
+          {opened && (
+            reward?.type === 'error' ? (
+              <Text style={styles.errorText}>{reward.message}</Text>
+            ) : (
+              <>
+                <Text style={styles.rewardText}>{rewardLabel(reward)}</Text>
 
-              <TouchableOpacity style={styles.closeButton} onPress={handleClose}>
-                <Text style={styles.closeButtonText}>확인</Text>
-              </TouchableOpacity>
-            </>
+                {!adUsed ? (
+                  <TouchableOpacity style={styles.adButton} onPress={handleAd} activeOpacity={0.8} disabled={loading}>
+                    {loading
+                      ? <ActivityIndicator color={colors.surface} size="small" />
+                      : <Text style={styles.adButtonText}>📺 광고 보고 2배 획득!</Text>
+                    }
+                  </TouchableOpacity>
+                ) : (
+                  <Text style={styles.adDoneText}>✓ 광고 보상 획득 완료!</Text>
+                )}
+              </>
+            )
           )}
 
+          {opened
+            ? <TouchableOpacity style={styles.closeButton} onPress={handleClose}>
+                <Text style={styles.closeButtonText}>확인</Text>
+              </TouchableOpacity>
+            : <TouchableOpacity style={styles.closeLink} onPress={handleClose}>
+                <Text style={styles.closeLinkText}>나중에</Text>
+              </TouchableOpacity>
+          }
         </View>
       </View>
     </Modal>
@@ -151,23 +167,37 @@ const styles = StyleSheet.create({
     fontFamily: fontFamily.regular,
     color: colors.textSub,
   },
-  boxButton: {
-    width: 100,
-    height: 100,
-    borderRadius: radius.xl,
+  boxRow: {
+    flexDirection: 'row',
+    gap: spacing.lg,
+    marginVertical: spacing.md,
+  },
+  boxBtn: {
+    width: 80,
+    height: 80,
+    borderRadius: radius.lg,
     backgroundColor: colors.lavenderLight,
     justifyContent: 'center',
     alignItems: 'center',
-    marginVertical: spacing.md,
   },
-  boxEmoji: {
-    fontSize: 52,
+  boxBtnDimmed: {
+    opacity: 0.3,
+  },
+  boxImage: {
+    width: 56,
+    height: 56,
+    resizeMode: 'contain',
   },
   rewardText: {
     fontSize: typography.xxl,
     fontFamily: fontFamily.bold,
     color: colors.lavenderDark,
-    marginVertical: spacing.md,
+  },
+  errorText: {
+    fontSize: typography.md,
+    fontFamily: fontFamily.regular,
+    color: colors.error,
+    textAlign: 'center',
   },
   adButton: {
     backgroundColor: colors.lavenderDark,
