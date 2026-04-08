@@ -155,7 +155,6 @@ async function checkin(req, res) {
            AND (c.repeat_type = 'daily' OR FIND_IN_SET(?, c.repeat_days))`,
         [today, userId, todayDow]
       );
-      console.log('[allDone check]', { total: allDoneRow.total, done: allDoneRow.done, today, userId });
       const allDone = allDoneRow.total > 0 && Number(allDoneRow.total) === Number(allDoneRow.done);
 
       if (allDone && lastAllDoneDate !== today) {
@@ -344,4 +343,44 @@ async function uncheck(req, res) {
   }
 }
 
-module.exports = { checkin, uncheck, getToday, getCalendar };
+// ─────────────────────────────────────────
+// POST /api/logs/xp-ad
+// 습관 체크인 후 광고 시청 시 해당 XP 2배 지급 (하루 1회)
+// ─────────────────────────────────────────
+// xpType: 'checkin' (첫 습관 달성) | 'alldone' (모든 습관 완료)
+async function xpAd(req, res) {
+  const userId = req.user.userId;
+  const { xp, xpType } = req.body;
+
+  if (!xp || xp <= 0) {
+    return res.status(400).json({ message: 'xp 값이 올바르지 않습니다.' });
+  }
+  if (!['checkin', 'alldone'].includes(xpType)) {
+    return res.status(400).json({ message: 'xpType이 올바르지 않습니다.' });
+  }
+
+  const today = getTodayKST();
+  const col = xpType === 'checkin' ? 'last_checkin_ad_date' : 'last_alldone_ad_date';
+
+  try {
+    const [[userRow]] = await pool.query(
+      `SELECT ${col} AS lastAdDate FROM users WHERE id = ?`,
+      [userId]
+    );
+    const lastAdDate = userRow.lastAdDate ? normalizeDateStr(userRow.lastAdDate) : null;
+
+    if (lastAdDate === today) {
+      return res.status(409).json({ message: '오늘은 이미 해당 광고 XP 보너스를 받았어요.' });
+    }
+
+    await grantExp(userId, xp);
+    await pool.query(`UPDATE users SET ${col} = ? WHERE id = ?`, [today, userId]);
+
+    return res.json({ message: '광고 XP 보너스 지급 완료!', bonusXp: xp });
+  } catch (err) {
+    console.error('xpAd error:', err);
+    return res.status(500).json({ message: '서버 오류가 발생했습니다.' });
+  }
+}
+
+module.exports = { checkin, uncheck, getToday, getCalendar, xpAd };

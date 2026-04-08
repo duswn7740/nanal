@@ -412,8 +412,11 @@ export default function HomeScreen() {
         xp={xpModal?.xp ?? 0}
         allDone={xpModal?.allDone ?? false}
         onClose={() => setXpModal(null)}
-        onWatchAd={() => {
-          // TODO: 광고 연동 후 2배 지급
+        onWatchAd={async () => {
+          const xp = xpModal?.xp ?? 0;
+          const allDone = xpModal?.allDone ?? false;
+          if (xp >= 10) await api.post('/logs/xp-ad', { xp: 10, xpType: 'checkin' }).catch(() => {});
+          if (allDone) await api.post('/logs/xp-ad', { xp: 5, xpType: 'alldone' }).catch(() => {});
           setXpModal(null);
         }}
       />
