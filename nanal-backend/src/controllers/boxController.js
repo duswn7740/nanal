@@ -3,11 +3,10 @@ const { getTodayKST, normalizeDateField } = require('../utils/date');
 const { grantExp } = require('../utils/character');
 
 // 선물상자 보상 테이블
-// 5xp: 50%, 10xp: 30%, 코인1개: 20%
 const REWARDS = [
-  { type: 'xp',   amount: 5,  weight: 50 },
-  { type: 'xp',   amount: 10, weight: 30 },
-  { type: 'coin', amount: 1,  weight: 20 },
+  { type: 'xp',   amount: 10,  weight: 60 },
+  { type: 'xp',   amount: 20, weight: 30 },
+  { type: 'coin', amount: 1,  weight: 10 },
 ];
 const TOTAL_WEIGHT = REWARDS.reduce((sum, r) => sum + r.weight, 0); // 100
 

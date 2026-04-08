@@ -314,63 +314,11 @@ async function uncheck(req, res) {
       return res.status(409).json({ message: '오늘 완료된 기록이 없습니다.' });
     }
 
-    // 체크인 취소: is_done = false
+    // 체크인 취소: is_done = false (XP는 환수하지 않음, xp_granted 유지 → 재체크인 시 중복 지급 방지)
     await pool.query(
-      'UPDATE logs SET is_done = FALSE, done_at = NULL, memo = NULL, xp_granted = FALSE WHERE id = ?',
+      'UPDATE logs SET is_done = FALSE, done_at = NULL, memo = NULL WHERE id = ?',
       [logs[0].id]
     );
-
-    // XP 환수: 현재 users 상태 기준으로 필요한 만큼만 차감
-    const todayDow = new Date(Date.now() + 9 * 60 * 60 * 1000).getUTCDay();
-    const [[userRow]] = await pool.query(
-      'SELECT last_checkin_date, last_all_done_date FROM users WHERE id = ?',
-      [userId]
-    );
-    const lastCheckinDate = userRow.last_checkin_date ? normalizeDateStr(userRow.last_checkin_date) : null;
-    const lastAllDoneDate = userRow.last_all_done_date ? normalizeDateStr(userRow.last_all_done_date) : null;
-
-    let xpRevoke = 0;
-
-    // 전체완료 보너스 환수: 취소 후 더이상 전체완료가 아니면 -5
-    if (lastAllDoneDate === today) {
-      const [[allDoneRow]] = await pool.query(
-        `SELECT
-           COUNT(*) AS total,
-           SUM(CASE WHEN l.is_done = TRUE THEN 1 ELSE 0 END) AS done
-         FROM challenges c
-         LEFT JOIN logs l ON l.challenge_id = c.id AND l.log_date = ?
-         WHERE c.user_id = ? AND c.is_active = TRUE
-           AND (c.repeat_type = 'daily' OR FIND_IN_SET(?, c.repeat_days))`,
-        [today, userId, todayDow]
-      );
-      const stillAllDone = allDoneRow.total > 0 && allDoneRow.total === allDoneRow.done;
-      if (!stillAllDone) {
-        xpRevoke += 5;
-        await pool.query('UPDATE users SET last_all_done_date = NULL WHERE id = ?', [userId]);
-      }
-    }
-
-    // 첫 체크인 XP 환수: 오늘 완료된 습관이 하나도 없으면 -10
-    if (lastCheckinDate === today) {
-      const [[doneCountRow]] = await pool.query(
-        `SELECT COUNT(*) AS cnt
-         FROM logs l
-         JOIN challenges c ON c.id = l.challenge_id
-         WHERE c.user_id = ? AND l.log_date = ? AND l.is_done = TRUE`,
-        [userId, today]
-      );
-      if (doneCountRow.cnt === 0) {
-        xpRevoke += 10;
-        await pool.query('UPDATE users SET last_checkin_date = NULL WHERE id = ?', [userId]);
-      }
-    }
-
-    if (xpRevoke > 0) {
-      await pool.query(
-        'UPDATE user_characters SET exp = GREATEST(0, exp - ?) WHERE user_id = ? AND is_active = 1 AND is_purchased = TRUE',
-        [xpRevoke, userId]
-      );
-    }
 
     // 스트릭 롤백: 어제 완료 여부에 따라 결정
     const yesterday = getYesterdayKST();
