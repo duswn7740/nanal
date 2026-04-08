@@ -148,13 +148,14 @@ async function checkin(req, res) {
       const [[allDoneRow]] = await pool.query(
         `SELECT
            COUNT(*) AS total,
-           SUM(CASE WHEN l.is_done = TRUE THEN 1 ELSE 0 END) AS done
+           COUNT(CASE WHEN l.is_done = TRUE THEN 1 END) AS done
          FROM challenges c
          LEFT JOIN logs l ON l.challenge_id = c.id AND l.log_date = ?
          WHERE c.user_id = ? AND c.is_active = TRUE
            AND (c.repeat_type = 'daily' OR FIND_IN_SET(?, c.repeat_days))`,
         [today, userId, todayDow]
       );
+      console.log('[allDone check]', { total: allDoneRow.total, done: allDoneRow.done, today, userId });
       const allDone = allDoneRow.total > 0 && Number(allDoneRow.total) === Number(allDoneRow.done);
 
       if (allDone && lastAllDoneDate !== today) {
