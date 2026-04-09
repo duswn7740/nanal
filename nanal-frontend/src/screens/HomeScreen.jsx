@@ -18,6 +18,7 @@ import AddHabitModal from './AddHabitModal';
 import EditHabitModal from './EditHabitModal';
 import GiftBoxModal from './GiftBoxModal';
 import { rescheduleAllHabits, scheduleHabitNotifications, cancelHabitNotifications } from '../utils/notifications';
+import { useRewardedAd } from '../hooks/useRewardedAd';
 
 export default function HomeScreen() {
   const navigation = useNavigation();
@@ -36,7 +37,16 @@ export default function HomeScreen() {
   const originalHabitsRef = useRef(null);
   const allChallengesRef = useRef([]);
   const currentOpenSwipeable = useRef(null); // 현재 열린 스와이프 카드
-  const [xpModal, setXpModal] = useState(null); // { xp, isAllDone }
+  const [xpModal, setXpModal] = useState(null); // { xp, allDone }
+  const [xpAdDone, setXpAdDone] = useState(false);
+  const xpModalRef = useRef(null);
+  const { show: showRewardedAd } = useRewardedAd(useCallback(async () => {
+    const modal = xpModalRef.current;
+    if (!modal) return;
+    if (modal.xp >= 10) await api.post('/logs/xp-ad', { xp: 10, xpType: 'checkin' }).catch(() => {});
+    if (modal.allDone) await api.post('/logs/xp-ad', { xp: 5, xpType: 'alldone' }).catch(() => {});
+    setXpAdDone(true);
+  }, []));
 
   const fetchToday = useCallback(async () => {
     setError(false);
@@ -216,7 +226,9 @@ export default function HomeScreen() {
       } else {
         const { data } = await api.post('/logs/checkin', { challenge_id: challengeId });
         if (data.xpGain > 0) {
-          setXpModal({ xp: data.xpGain, allDone: data.xpGain >= 15 });
+          const modal = { xp: data.xpGain, allDone: data.xpGain >= 15 };
+          xpModalRef.current = modal;
+          setXpModal(modal);
         }
       }
     } catch (err) {
@@ -411,15 +423,14 @@ export default function HomeScreen() {
         visible={!!xpModal}
         xp={xpModal?.xp ?? 0}
         allDone={xpModal?.allDone ?? false}
-        onClose={() => setXpModal(null)}
-        onWatchAd={async () => {
-          const xp = xpModal?.xp ?? 0;
-          const allDone = xpModal?.allDone ?? false;
-          if (xp >= 10) await api.post('/logs/xp-ad', { xp: 10, xpType: 'checkin' }).catch(() => {});
-          if (allDone) await api.post('/logs/xp-ad', { xp: 5, xpType: 'alldone' }).catch(() => {});
-          setXpModal(null);
+        adDone={xpAdDone}
+        onClose={() => { setXpModal(null); setXpAdDone(false); }}
+        onWatchAd={() => {
+          const shown = showRewardedAd();
+          if (!shown) alert('광고를 불러오는 중이에요. 잠시 후 다시 시도해줘요.');
         }}
       />
+
     </SafeAreaView>
   );
 }
@@ -443,7 +454,8 @@ function CharacterHeader({ character, doneCount, habitsLength }) {
   );
 }
 
-function XpModal({ visible, xp, allDone, onClose, onWatchAd }) {
+function XpModal({ visible, xp, allDone, adDone, onClose, onWatchAd }) {
+
   return (
     <Modal visible={visible} transparent animationType="fade" onRequestClose={onClose}>
       <TouchableOpacity style={styles.xpOverlay} activeOpacity={1} onPress={onClose}>
@@ -455,9 +467,15 @@ function XpModal({ visible, xp, allDone, onClose, onWatchAd }) {
               <Text style={styles.xpBonusText}>보너스 포함</Text>
             </View>
           )}
-          <TouchableOpacity style={styles.xpAdBtn} onPress={onWatchAd} activeOpacity={0.8}>
-            <Text style={styles.xpAdBtnText}>📺 광고 보고 2배 받기</Text>
-          </TouchableOpacity>
+          {adDone ? (
+            <View style={styles.xpAdDoneBadge}>
+              <Text style={styles.xpAdDoneText}>✓ 광고 보상 획득 완료!</Text>
+            </View>
+          ) : (
+            <TouchableOpacity style={styles.xpAdBtn} onPress={onWatchAd} activeOpacity={0.8}>
+              <Text style={styles.xpAdBtnText}>📺 광고 보고 2배 받기</Text>
+            </TouchableOpacity>
+          )}
           <TouchableOpacity style={styles.xpCloseBtn} onPress={onClose} activeOpacity={0.8}>
             <Text style={styles.xpCloseBtnText}>나가기</Text>
           </TouchableOpacity>
@@ -645,6 +663,14 @@ const styles = StyleSheet.create({
   },
   xpAdBtnText: {
     fontSize: typography.md, fontFamily: fontFamily.bold, color: colors.surface,
+  },
+  xpAdDoneBadge: {
+    width: '100%', backgroundColor: colors.lavenderLight,
+    borderRadius: radius.lg, paddingVertical: spacing.md,
+    alignItems: 'center', marginTop: spacing.sm,
+  },
+  xpAdDoneText: {
+    fontSize: typography.md, fontFamily: fontFamily.bold, color: colors.lavenderDark,
   },
   xpCloseBtn: {
     width: '100%', borderRadius: radius.lg, paddingVertical: spacing.md,

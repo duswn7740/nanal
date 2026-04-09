@@ -83,6 +83,27 @@ export default function SettingsScreen() {
         </View>
 
         <Text style={styles.version}>나날 v1.0.0</Text>
+
+        <TouchableOpacity
+          style={styles.withdrawBtn}
+          onPress={() => {
+            Alert.alert('회원탈퇴', '정말 탈퇴할까요?\n모든 기록이 삭제됩니다.', [
+              { text: '취소', style: 'cancel' },
+              {
+                text: '탈퇴', style: 'destructive', onPress: async () => {
+                  try {
+                    await api.delete('/auth/withdraw');
+                    logout();
+                  } catch {
+                    Alert.alert('오류', '탈퇴에 실패했어요. 다시 시도해줘요.');
+                  }
+                }
+              },
+            ]);
+          }}
+        >
+          <Text style={styles.withdrawText}>회원탈퇴</Text>
+        </TouchableOpacity>
       </ScrollView>
 
       <PolicyModal
@@ -182,6 +203,18 @@ const styles = StyleSheet.create({
     color: colors.textSub,
     marginTop: spacing.xxl,
     paddingBottom: spacing.xl,
+  },
+
+  withdrawBtn: {
+    alignItems: 'center',
+    paddingBottom: spacing.xl,
+    marginBottom: 10,
+  },
+  withdrawText: {
+    fontSize: typography.sm,
+    fontFamily: fontFamily.regular,
+    color: colors.textSub,
+    opacity: 0.5,
   },
 
   // 닉네임 모달

@@ -1,10 +1,11 @@
-import React, { useState, useMemo } from 'react';
+import React, { useState, useMemo, useCallback } from 'react';
 import {
   View, Text, Modal, StyleSheet, TouchableOpacity,
   Image, ActivityIndicator,
 } from 'react-native';
 import { colors, typography, fontFamily, spacing, radius } from '../theme';
 import api from '../api';
+import { useRewardedAd } from '../hooks/useRewardedAd';
 
 const GIFT_IMAGES = [
   require('../../assets/icons/gift1.png'),
@@ -32,11 +33,23 @@ function pickBoxes() {
 
 export default function GiftBoxModal({ visible, onClose, onCoinsUpdated }) {
   const [reward, setReward] = useState(null);
-  const [selectedIdx, setSelectedIdx] = useState(null); // 선택한 상자 인덱스 (0,1,2)
+  const [selectedIdx, setSelectedIdx] = useState(null);
   const [adUsed, setAdUsed] = useState(false);
   const [loading, setLoading] = useState(false);
+  const rewardRef = React.useRef(null);
 
-  const boxes = useMemo(() => pickBoxes(), [visible]); // 열릴 때마다 새로 선택
+  const boxes = useMemo(() => pickBoxes(), [visible]);
+
+  const handleAdRewarded = useCallback(async () => {
+    if (!rewardRef.current) return;
+    try {
+      const { data } = await api.post('/box/ad', { reward: rewardRef.current });
+      setAdUsed(true);
+      onCoinsUpdated?.(data.coins);
+    } catch { }
+  }, [onCoinsUpdated]);
+
+  const { show: showRewardedAd } = useRewardedAd(handleAdRewarded);
 
   const handleOpen = async (idx) => {
     if (loading || reward) return;
@@ -44,6 +57,7 @@ export default function GiftBoxModal({ visible, onClose, onCoinsUpdated }) {
     setLoading(true);
     try {
       const { data } = await api.post('/box/open');
+      rewardRef.current = data.reward;
       setReward(data.reward);
       onCoinsUpdated?.(data.coins);
     } catch (err) {
@@ -54,17 +68,10 @@ export default function GiftBoxModal({ visible, onClose, onCoinsUpdated }) {
     }
   };
 
-  const handleAd = async () => {
+  const handleAd = () => {
     if (loading || adUsed) return;
-    setLoading(true);
-    try {
-      const { data } = await api.post('/box/ad', { reward });
-      setAdUsed(true);
-      onCoinsUpdated?.(data.coins);
-    } catch {
-    } finally {
-      setLoading(false);
-    }
+    const shown = showRewardedAd();
+    if (!shown) alert('광고를 불러오는 중이에요. 잠시 후 다시 시도해줘요.');
   };
 
   const handleClose = () => {

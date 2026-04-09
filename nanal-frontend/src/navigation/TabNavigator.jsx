@@ -1,8 +1,10 @@
 import React from 'react';
 import { createBottomTabNavigator } from '@react-navigation/bottom-tabs';
-import { Image, Text, StyleSheet } from 'react-native';
+import { Image, View, StyleSheet } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { colors, typography, fontFamily } from '../theme';
+import { BannerAd, BannerAdSize } from 'react-native-google-mobile-ads';
+import { BANNER_AD_ID } from '../constants/adIds';
 
 import HomeScreen from '../screens/HomeScreen';
 import CalendarScreen from '../screens/CalendarScreen';
@@ -37,7 +39,8 @@ const TABS = [
 export default function TabNavigator() {
   const insets = useSafeAreaInsets();
   return (
-    <Tab.Navigator
+    <View style={styles.container}>
+      <Tab.Navigator
       screenOptions={({ route }) => {
         const tab = TABS.find(t => t.name === route.name);
         return {
@@ -60,19 +63,24 @@ export default function TabNavigator() {
         <Tab.Screen key={tab.name} name={tab.name} component={tab.component} />
       ))}
     </Tab.Navigator>
+      <BannerAd
+        unitId={BANNER_AD_ID}
+        size={BannerAdSize.ANCHORED_ADAPTIVE_BANNER}
+      />
+    </View>
   );
 }
 
 const styles = StyleSheet.create({
+  container: { flex: 1 },
   tabBar: {
     backgroundColor: colors.surface,
     borderTopColor: colors.border,
     borderTopWidth: 1,
-    paddingTop: 6,
   },
   icon: {
-    width: 28,
-    height: 28,
+    width: 32,
+    height: 32,
   },
   label: {
     fontSize: typography.xs,

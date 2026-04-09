@@ -70,7 +70,7 @@ async function login(req, res) {
 
   try {
     const [rows] = await pool.query(
-      'SELECT id, email, password_hash, nickname, sprout_state, timezone FROM users WHERE email = ?',
+      'SELECT id, email, password_hash, nickname, sprout_state, timezone FROM users WHERE email = ? AND deleted_at IS NULL',
       [email]
     );
     console.log('[login] DB 조회 결과:', rows.length, '건');
@@ -143,4 +143,16 @@ async function updateNickname(req, res) {
   }
 }
 
-module.exports = { signup, login, me, updateNickname };
+// DELETE /api/auth/withdraw
+async function withdraw(req, res) {
+  const userId = req.user.userId;
+  try {
+    await pool.query('UPDATE users SET deleted_at = NOW() WHERE id = ?', [userId]);
+    return res.json({ message: '회원탈퇴가 완료되었습니다.' });
+  } catch (err) {
+    console.error('withdraw error:', err);
+    return res.status(500).json({ message: '서버 오류가 발생했습니다.' });
+  }
+}
+
+module.exports = { signup, login, me, updateNickname, withdraw };

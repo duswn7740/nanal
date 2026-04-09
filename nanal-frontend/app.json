@@ -4,7 +4,7 @@
     "slug": "nanal",
     "version": "1.0.0",
     "orientation": "portrait",
-    "icon": "./assets/icons/mainicon.png",
+    "icon": "./assets/icons/icon.png",
     "userInterfaceStyle": "light",
     "splash": {
       "image": "./assets/icons/mainicon.png",
@@ -17,7 +17,7 @@
     "android": {
       "adaptiveIcon": {
         "backgroundColor": "#F9F9F9",
-        "foregroundImage": "./assets/icons/mainicon.png"
+        "foregroundImage": "./assets/icons/icon.png"
       },
       "package": "com.y83849455.nanal",
       "usesCleartextTraffic": true,
@@ -37,7 +37,13 @@
       "./assets/fonts/Galmuri14.ttf"
     ],
     "plugins": [
-      "expo-font"
+      "expo-font",
+      [
+        "react-native-google-mobile-ads",
+        {
+          "androidAppId": "ca-app-pub-6334368151294945~2587585211"
+        }
+      ]
     ],
     "extra": {
       "eas": {
