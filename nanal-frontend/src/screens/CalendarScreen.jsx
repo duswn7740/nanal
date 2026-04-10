@@ -1,7 +1,7 @@
-import React, { useState, useCallback, useMemo } from 'react';
+import React, { useState, useCallback, useMemo, useRef } from 'react';
 import { useFocusEffect } from '@react-navigation/native';
 import {
-  View, Text, ScrollView, Image,
+  View, Text, ScrollView, Image, Modal, TouchableOpacity,
   SafeAreaView, StyleSheet, ActivityIndicator, Dimensions,
 } from 'react-native';
 import { colors, typography, fontFamily, spacing, radius } from '../theme';
@@ -30,24 +30,30 @@ function toDateStr(year, month, day) {
   return `${year}-${String(month).padStart(2, '0')}-${String(day).padStart(2, '0')}`;
 }
 
-// 특정 날짜에 활성이었던 캐릭터 이미지 반환
-// history: [{activated_at, name, level}, ...] activated_at ASC 정렬
-function getCharacterImageForDate(dateStr, history, activeCharacter) {
-  if (!history || history.length === 0) {
-    return activeCharacter ? getCharacterImage(activeCharacter.name, activeCharacter.level) : null;
+// 고정 모드: 특정 날짜의 레벨 반환
+function getLevelForDate(dateStr, levelHistory) {
+  let level = 1;
+  for (const h of levelHistory) {
+    const d = h.leveled_up_at?.slice?.(0, 10) ?? String(h.leveled_up_at);
+    if (d <= dateStr) level = h.level;
+    else break;
   }
-  // dateStr 이하의 마지막 activated_at 항목
+  return level;
+}
+
+// 히스토리 모드: 특정 날짜에 활성이었던 캐릭터+레벨 이미지 반환
+function getHistoryImageForDate(dateStr, history) {
   let match = null;
   for (const h of history) {
-    const activatedStr = h.activated_at?.slice(0, 10) ?? h.activated_at;
-    if (activatedStr <= dateStr) match = h;
+    const d = h.activated_at?.slice?.(0, 10) ?? String(h.activated_at);
+    if (d <= dateStr) match = h;
     else break;
   }
   if (!match) return null;
   return getCharacterImage(match.name, match.level);
 }
 
-function HabitGrass({ title, year, month, calendar, history, activeCharacter }) {
+function HabitGrass({ title, year, month, calendar, calendarData }) {
   const daysInMonth = getDaysInMonth(year, month);
   const firstDow = getFirstDayOfWeek(year, month);
 
@@ -74,7 +80,15 @@ function HabitGrass({ title, year, month, calendar, history, activeCharacter }) 
               const dateStr = toDateStr(year, month, day);
               const dayLogs = calendar[dateStr] ?? [];
               const done = dayLogs.find(l => l.title === title)?.is_done ?? false;
-              const image = done ? getCharacterImageForDate(dateStr, history, activeCharacter) : null;
+              let image = null;
+              if (done && calendarData) {
+                if (calendarData.mode === 'history') {
+                  image = getHistoryImageForDate(dateStr, calendarData.history ?? []);
+                } else {
+                  const level = getLevelForDate(dateStr, calendarData.levelHistory ?? []);
+                  image = calendarData.character ? getCharacterImage(calendarData.character.name, level) : null;
+                }
+              }
               return (
                 <View key={ci} style={[styles.cell, done ? styles.cellDone : styles.cellEmpty]}>
                   {image && <Image source={image} style={styles.cellImage} />}
@@ -94,23 +108,25 @@ export default function CalendarScreen() {
   const [month, setMonth] = useState(today.getMonth() + 1);
   const [calendar, setCalendar] = useState({});
   const [habits, setHabits] = useState([]);
-  const [history, setHistory] = useState([]);
-  const [activeCharacter, setActiveCharacter] = useState(null);
+  const [calendarData, setCalendarData] = useState(null);
   const [loading, setLoading] = useState(false);
+  const [menuVisible, setMenuVisible] = useState(false);
+  const [charPickerVisible, setCharPickerVisible] = useState(false);
+  const [ownedChars, setOwnedChars] = useState([]);
 
   const fetchData = useCallback(async (y, m) => {
     setLoading(true);
     try {
-      const [calRes, charRes, challengeRes, historyRes] = await Promise.all([
+      const [calRes, challengeRes, calCharRes, ownedRes] = await Promise.all([
         api.get('/logs/calendar', { params: { year: y, month: m } }),
-        api.get('/characters/active'),
         api.get('/challenges'),
-        api.get('/characters/history'),
+        api.get('/characters/calendar'),
+        api.get('/characters'),
       ]);
       setCalendar(calRes.data.calendar);
-      setActiveCharacter(charRes.data.character);
       setHabits(challengeRes.data.challenges);
-      setHistory(historyRes.data.history);
+      setCalendarData(calCharRes.data);
+      setOwnedChars((ownedRes.data.characters ?? []).filter(c => c.is_purchased || c.is_active));
     } catch {
       setCalendar({});
     } finally {
@@ -125,9 +141,30 @@ export default function CalendarScreen() {
     setMonth(m);
   }, []);
 
+  const handleSetHistory = async () => {
+    setMenuVisible(false);
+    await api.patch('/characters/calendar', { mode: 'history' }).catch(() => {});
+    const res = await api.get('/characters/calendar').catch(() => null);
+    if (res) setCalendarData(res.data);
+  };
+
+  const handleSetFixed = (characterId) => async () => {
+    setCharPickerVisible(false);
+    await api.patch('/characters/calendar', { mode: 'fixed', character_id: characterId }).catch(() => {});
+    const res = await api.get('/characters/calendar').catch(() => null);
+    if (res) setCalendarData(res.data);
+  };
+
   return (
     <SafeAreaView style={styles.safeArea}>
-      <Header title="달력" />
+      <Header
+        title="달력"
+        right={
+          <TouchableOpacity onPress={() => setMenuVisible(true)} style={styles.menuBtn} activeOpacity={0.6}>
+            <Text style={styles.menuDots}>⋮</Text>
+          </TouchableOpacity>
+        }
+      />
       <MonthNavigator year={year} month={month} onChange={handleMonthChange} />
 
       {loading ? (
@@ -149,14 +186,46 @@ export default function CalendarScreen() {
                   year={year}
                   month={month}
                   calendar={calendar}
-                  history={history}
-                  activeCharacter={activeCharacter}
+                  calendarData={calendarData}
                 />
               ))}
             </View>
           )}
         </ScrollView>
       )}
+      {/* 점3개 메뉴 */}
+      <Modal visible={menuVisible} transparent animationType="fade" onRequestClose={() => setMenuVisible(false)}>
+        <TouchableOpacity style={styles.menuOverlay} activeOpacity={1} onPress={() => setMenuVisible(false)}>
+          <View style={styles.menuCard}>
+            <TouchableOpacity style={styles.menuItem} onPress={handleSetHistory}>
+              <Text style={[styles.menuItemText, calendarData?.mode === 'history' && styles.menuItemActive]}>
+                히스토리 아이콘
+              </Text>
+            </TouchableOpacity>
+            <View style={styles.menuDivider} />
+            <TouchableOpacity style={styles.menuItem} onPress={() => { setMenuVisible(false); setCharPickerVisible(true); }}>
+              <Text style={[styles.menuItemText, calendarData?.mode === 'fixed' && styles.menuItemActive]}>
+                고정 아이콘
+              </Text>
+            </TouchableOpacity>
+          </View>
+        </TouchableOpacity>
+      </Modal>
+
+      {/* 고정 아이콘 캐릭터 선택 */}
+      <Modal visible={charPickerVisible} transparent animationType="fade" onRequestClose={() => setCharPickerVisible(false)}>
+        <TouchableOpacity style={styles.menuOverlay} activeOpacity={1} onPress={() => setCharPickerVisible(false)}>
+          <View style={styles.pickerCard}>
+            <Text style={styles.pickerTitle}>캐릭터 선택</Text>
+            {ownedChars.map(c => (
+              <TouchableOpacity key={c.character_id} style={styles.pickerItem} onPress={handleSetFixed(c.character_id)}>
+                <Image source={getCharacterImage(c.name, c.level)} style={styles.pickerImage} />
+                <Text style={styles.pickerName}>{c.name} Lv.{c.level}</Text>
+              </TouchableOpacity>
+            ))}
+          </View>
+        </TouchableOpacity>
+      </Modal>
     </SafeAreaView>
   );
 }
@@ -214,6 +283,20 @@ const styles = StyleSheet.create({
     borderRadius: radius.sm,
     resizeMode: 'cover',
   },
+  menuBtn: { padding: spacing.xs },
+  menuDots: { fontSize: typography.xl, color: colors.textMain, letterSpacing: 1 },
+  menuOverlay: { flex: 1, backgroundColor: 'rgba(0,0,0,0.2)', justifyContent: 'flex-start', alignItems: 'flex-end', paddingTop: 56, paddingRight: spacing.md },
+  menuCard: { backgroundColor: colors.surface, borderRadius: radius.lg, borderWidth: 1.5, borderColor: colors.border, overflow: 'hidden', minWidth: 160 },
+  menuItem: { paddingHorizontal: spacing.md, paddingVertical: spacing.md },
+  menuItemText: { fontSize: typography.md, fontFamily: fontFamily.regular, color: colors.textMain },
+  menuItemActive: { fontFamily: fontFamily.bold, color: colors.lavenderDark },
+  menuDivider: { height: 1, backgroundColor: colors.border, marginHorizontal: spacing.md },
+  pickerCard: { backgroundColor: colors.surface, borderRadius: radius.lg, borderWidth: 1.5, borderColor: colors.border, overflow: 'hidden', minWidth: 200, padding: spacing.md, gap: spacing.sm },
+  pickerTitle: { fontSize: typography.md, fontFamily: fontFamily.bold, color: colors.textMain, marginBottom: spacing.xs },
+  pickerItem: { flexDirection: 'row', alignItems: 'center', gap: spacing.sm, paddingVertical: spacing.xs },
+  pickerImage: { width: 36, height: 36, resizeMode: 'contain' },
+  pickerName: { fontSize: typography.md, fontFamily: fontFamily.regular, color: colors.textMain },
+
   emptyText: {
     textAlign: 'center',
     fontFamily: fontFamily.regular,

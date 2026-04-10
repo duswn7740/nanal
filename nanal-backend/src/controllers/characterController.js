@@ -89,4 +89,81 @@ async function getCharacterHistory(req, res) {
   }
 }
 
-module.exports = { getActiveCharacter, getCharacters, setActiveCharacter, getCharacterHistory };
+// GET /api/characters/calendar — 달력 표시용 데이터
+async function getCalendarCharacter(req, res) {
+  const userId = req.user.userId;
+  try {
+    const [[user]] = await pool.query(
+      'SELECT calendar_mode, calendar_character_id FROM users WHERE id = ?',
+      [userId]
+    );
+
+    if (user.calendar_mode === 'history') {
+      // 히스토리 모드: 날짜별 활성 캐릭터 + 레벨 이력 전체
+      const [history] = await pool.query(
+        `SELECT uc.activated_at, uc.level, c.name, uc.character_id
+         FROM user_characters uc
+         JOIN characters c ON c.id = uc.character_id
+         WHERE uc.user_id = ? AND uc.activated_at IS NOT NULL
+         ORDER BY uc.activated_at ASC`,
+        [userId]
+      );
+      return res.json({ mode: 'history', history });
+    } else {
+      // 고정 모드: 선택한 캐릭터 + 레벨 이력
+      const [[char]] = await pool.query(
+        `SELECT c.id, c.name
+         FROM user_characters uc
+         JOIN characters c ON c.id = uc.character_id
+         WHERE uc.user_id = ? AND uc.character_id = ?`,
+        [userId, user.calendar_character_id]
+      );
+      if (!char) return res.status(404).json({ message: '달력 캐릭터를 찾을 수 없습니다.' });
+
+      const [levelHistory] = await pool.query(
+        `SELECT level, leveled_up_at
+         FROM character_level_history
+         WHERE user_id = ? AND character_id = ?
+         ORDER BY leveled_up_at ASC`,
+        [userId, user.calendar_character_id]
+      );
+      return res.json({ mode: 'fixed', character: char, levelHistory });
+    }
+  } catch (err) {
+    console.error('getCalendarCharacter error:', err);
+    return res.status(500).json({ message: '서버 오류가 발생했습니다.' });
+  }
+}
+
+// PATCH /api/characters/calendar — 달력 모드/캐릭터 변경
+// body: { mode: 'history' } 또는 { mode: 'fixed', character_id }
+async function setCalendarCharacter(req, res) {
+  const userId = req.user.userId;
+  const { mode, character_id } = req.body;
+
+  if (!['history', 'fixed'].includes(mode)) {
+    return res.status(400).json({ message: 'mode는 history 또는 fixed여야 합니다.' });
+  }
+
+  try {
+    if (mode === 'fixed') {
+      const [rows] = await pool.query(
+        'SELECT id FROM user_characters WHERE user_id = ? AND character_id = ? AND is_purchased = 1',
+        [userId, character_id]
+      );
+      if (rows.length === 0) return res.status(403).json({ message: '보유하지 않은 캐릭터입니다.' });
+      await pool.query(
+        'UPDATE users SET calendar_mode = ?, calendar_character_id = ? WHERE id = ?',
+        [mode, character_id, userId]
+      );
+    } else {
+      await pool.query('UPDATE users SET calendar_mode = ? WHERE id = ?', [mode, userId]);
+    }
+    return res.json({ message: '달력 설정이 변경되었습니다.' });
+  } catch (err) {
+    console.error('setCalendarCharacter error:', err);
+    return res.status(500).json({ message: '서버 오류가 발생했습니다.' });
+  }
+}
+
+module.exports = { getActiveCharacter, getCharacters, setActiveCharacter, getCharacterHistory, getCalendarCharacter, setCalendarCharacter };

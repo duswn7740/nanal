@@ -34,6 +34,11 @@ function getYesterdayKST() {
   return getKSTDateDaysAgo(1);
 }
 
+function getTomorrowKST() {
+  const kst = new Date(Date.now() + KST_OFFSET_MS + 24 * 60 * 60 * 1000);
+  return kst.toISOString().slice(0, 10);
+}
+
 /**
  * MariaDB의 DATE 컬럼은 JS에서 Date 객체로 오는 경우가 있어
  * 'YYYY-MM-DD' 문자열로 일관되게 변환할 때 사용합니다.
@@ -55,4 +60,4 @@ function normalizeDateField(val) {
   return String(val).slice(0, 10);
 }
 
-module.exports = { getTodayKST, getYesterdayKST, getKSTDateDaysAgo, normalizeDateStr, normalizeDateField };
+module.exports = { getTodayKST, getYesterdayKST, getTomorrowKST, getKSTDateDaysAgo, normalizeDateStr, normalizeDateField };
