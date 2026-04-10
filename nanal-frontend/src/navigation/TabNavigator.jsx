@@ -45,7 +45,7 @@ export default function TabNavigator() {
         const tab = TABS.find(t => t.name === route.name);
         return {
           headerShown: false,
-          tabBarStyle: [styles.tabBar, { paddingBottom: insets.bottom + 6, height: 56 + insets.bottom }],
+          tabBarStyle: [styles.tabBar, { paddingBottom: insets.bottom, height: 56 + insets.bottom }],
           tabBarActiveTintColor: colors.lavenderDark,
           tabBarInactiveTintColor: colors.textSub,
           tabBarLabel: () => null,

@@ -178,7 +178,7 @@ export default function CharacterScreen() {
                 <View key={char.id} style={[styles.charCard, styles.charCardLocked]}>
                   <View style={styles.lockedImageWrapper}>
                     <Avatar size="md" image={image} style={styles.lockedAvatar} />
-                    <Text style={styles.lockIcon}>🔒</Text>
+                    <Image source={require('../../assets/icons/lock.png')} style={styles.lockIcon} />
                   </View>
                   <Text style={styles.charName}>{char.name}</Text>
                   <Text style={styles.unlockCondition}>{char.unlock_condition}</Text>
@@ -305,7 +305,7 @@ const styles = StyleSheet.create({
   charCardUnlocked: { borderColor: colors.rose, borderStyle: 'dashed' },
 
   lockedImageWrapper: { position: 'relative', alignItems: 'center' },
-  lockIcon: { position: 'absolute', bottom: -4, right: -4, fontSize: 14 },
+  lockIcon: { position: 'absolute', bottom: -4, right: -4, width: 16, height: 16 },
 
   charName: { fontSize: typography.sm, fontFamily: fontFamily.bold, color: colors.textMain, textAlign: 'center' },
   charLevel: { fontSize: typography.xs, fontFamily: fontFamily.regular, color: colors.textSub },
