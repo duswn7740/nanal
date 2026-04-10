@@ -40,12 +40,23 @@ export default function HomeScreen() {
   const [xpModal, setXpModal] = useState(null); // { xp, allDone }
   const [xpAdDone, setXpAdDone] = useState(false);
   const xpModalRef = useRef(null);
+  const adContextRef = useRef(null); // 'xp' | { type: 'box', reward, onDone }
+
   const { show: showRewardedAd } = useRewardedAd(useCallback(async () => {
-    const modal = xpModalRef.current;
-    if (!modal) return;
-    if (modal.xp >= 10) await api.post('/logs/xp-ad', { xp: 10, xpType: 'checkin' }).catch(() => {});
-    if (modal.allDone) await api.post('/logs/xp-ad', { xp: 5, xpType: 'alldone' }).catch(() => {});
-    setXpAdDone(true);
+    const ctx = adContextRef.current;
+    if (!ctx) return;
+
+    if (ctx === 'xp') {
+      const modal = xpModalRef.current;
+      if (!modal) return;
+      if (modal.xp >= 10) await api.post('/logs/xp-ad', { xp: 10, xpType: 'checkin' }).catch(() => {});
+      if (modal.allDone) await api.post('/logs/xp-ad', { xp: 5, xpType: 'alldone' }).catch(() => {});
+      setXpAdDone(true);
+    } else if (ctx.type === 'box') {
+      ctx.onDone();
+    }
+
+    adContextRef.current = null;
   }, []));
 
   const fetchToday = useCallback(async () => {
@@ -401,6 +412,11 @@ export default function HomeScreen() {
         visible={giftBoxVisible}
         onClose={() => setGiftBoxVisible(false)}
         onCoinsUpdated={() => {}}
+        onWatchAd={(reward, onDone, onError) => {
+          adContextRef.current = { type: 'box', reward, onDone };
+          const shown = showRewardedAd();
+          if (!shown) { adContextRef.current = null; onError?.(); }
+        }}
       />
 
       <EditHabitModal
@@ -426,8 +442,9 @@ export default function HomeScreen() {
         adDone={xpAdDone}
         onClose={() => { setXpModal(null); setXpAdDone(false); }}
         onWatchAd={() => {
+          adContextRef.current = 'xp';
           const shown = showRewardedAd();
-          if (!shown) alert('광고를 불러오는 중이에요. 잠시 후 다시 시도해줘요.');
+          if (!shown) { adContextRef.current = null; alert('광고를 불러오는 중이에요. 잠시 후 다시 시도해줘요.'); }
         }}
       />
 

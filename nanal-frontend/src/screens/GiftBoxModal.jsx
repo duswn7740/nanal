@@ -1,11 +1,10 @@
-import React, { useState, useMemo, useCallback } from 'react';
+import React, { useState, useMemo, useRef } from 'react';
 import {
   View, Text, Modal, StyleSheet, TouchableOpacity,
   Image, ActivityIndicator,
 } from 'react-native';
 import { colors, typography, fontFamily, spacing, radius } from '../theme';
 import api from '../api';
-import { useRewardedAd } from '../hooks/useRewardedAd';
 
 const GIFT_IMAGES = [
   require('../../assets/icons/gift1.png'),
@@ -31,25 +30,15 @@ function pickBoxes() {
   return indices.slice(0, 3);
 }
 
-export default function GiftBoxModal({ visible, onClose, onCoinsUpdated }) {
+export default function GiftBoxModal({ visible, onClose, onCoinsUpdated, onWatchAd }) {
   const [reward, setReward] = useState(null);
   const [selectedIdx, setSelectedIdx] = useState(null);
   const [adUsed, setAdUsed] = useState(false);
+  const [adError, setAdError] = useState(false);
   const [loading, setLoading] = useState(false);
-  const rewardRef = React.useRef(null);
+  const rewardRef = useRef(null);
 
   const boxes = useMemo(() => pickBoxes(), [visible]);
-
-  const handleAdRewarded = useCallback(async () => {
-    if (!rewardRef.current) return;
-    try {
-      const { data } = await api.post('/box/ad', { reward: rewardRef.current });
-      setAdUsed(true);
-      onCoinsUpdated?.(data.coins);
-    } catch { }
-  }, [onCoinsUpdated]);
-
-  const { show: showRewardedAd } = useRewardedAd(handleAdRewarded);
 
   const handleOpen = async (idx) => {
     if (loading || reward) return;
@@ -69,15 +58,22 @@ export default function GiftBoxModal({ visible, onClose, onCoinsUpdated }) {
   };
 
   const handleAd = () => {
-    if (loading || adUsed) return;
-    const shown = showRewardedAd();
-    if (!shown) alert('광고를 불러오는 중이에요. 잠시 후 다시 시도해줘요.');
+    if (loading || adUsed || !rewardRef.current) return;
+    setAdError(false);
+    onWatchAd?.(rewardRef.current, async () => {
+      try {
+        const { data } = await api.post('/box/ad', { reward: rewardRef.current });
+        setAdUsed(true);
+        onCoinsUpdated?.(data.coins);
+      } catch { }
+    }, () => setAdError(true));
   };
 
   const handleClose = () => {
     setReward(null);
     setSelectedIdx(null);
     setAdUsed(false);
+    setAdError(false);
     onClose();
   };
 
@@ -120,7 +116,9 @@ export default function GiftBoxModal({ visible, onClose, onCoinsUpdated }) {
               <>
                 <Text style={styles.rewardText}>{rewardLabel(reward)}</Text>
 
-                {!adUsed ? (
+                {adError ? (
+                  <Text style={styles.adErrorText}>광고를 불러올 수 없어요</Text>
+                ) : !adUsed ? (
                   <TouchableOpacity style={styles.adButton} onPress={handleAd} activeOpacity={0.8} disabled={loading}>
                     {loading
                       ? <ActivityIndicator color={colors.surface} size="small" />
@@ -134,14 +132,9 @@ export default function GiftBoxModal({ visible, onClose, onCoinsUpdated }) {
             )
           )}
 
-          {opened
-            ? <TouchableOpacity style={styles.closeButton} onPress={handleClose}>
-                <Text style={styles.closeButtonText}>확인</Text>
-              </TouchableOpacity>
-            : <TouchableOpacity style={styles.closeLink} onPress={handleClose}>
-                <Text style={styles.closeLinkText}>나중에</Text>
-              </TouchableOpacity>
-          }
+          <TouchableOpacity style={styles.closeButton} onPress={handleClose}>
+            <Text style={styles.closeButtonText}>확인</Text>
+          </TouchableOpacity>
         </View>
       </View>
     </Modal>
@@ -216,6 +209,11 @@ const styles = StyleSheet.create({
     fontSize: typography.sm,
     fontFamily: fontFamily.bold,
     color: colors.surface,
+  },
+  adErrorText: {
+    fontSize: typography.sm,
+    fontFamily: fontFamily.regular,
+    color: colors.textSub,
   },
   adDoneText: {
     fontSize: typography.sm,
