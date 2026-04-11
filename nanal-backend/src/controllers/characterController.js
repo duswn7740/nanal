@@ -94,7 +94,7 @@ async function getCalendarCharacter(req, res) {
   const userId = req.user.userId;
   try {
     const [[user]] = await pool.query(
-      'SELECT calendar_mode, calendar_character_id FROM users WHERE id = ?',
+      'SELECT calendar_mode, calendar_character_id, calendar_fixed_level FROM users WHERE id = ?',
       [userId]
     );
 
