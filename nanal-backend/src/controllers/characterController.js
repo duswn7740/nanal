@@ -159,7 +159,7 @@ async function setCalendarCharacter(req, res) {
   try {
     if (mode === 'fixed') {
       const [rows] = await pool.query(
-        'SELECT id FROM user_characters WHERE user_id = ? AND character_id = ? AND is_purchased = 1',
+        'SELECT id FROM user_characters WHERE user_id = ? AND character_id = ?',
         [userId, character_id]
       );
       if (rows.length === 0) return res.status(403).json({ message: '보유하지 않은 캐릭터입니다.' });
