@@ -42,7 +42,7 @@ function getLevelForDate(dateStr, levelHistory) {
 }
 
 // 히스토리 모드: 특정 날짜에 활성이었던 캐릭터+레벨 이미지 반환
-function getHistoryImageForDate(dateStr, history) {
+function getHistoryImageForDate(dateStr, history, levelHistory) {
   let match = null;
   for (const h of history) {
     const d = h.activated_at?.slice?.(0, 10) ?? String(h.activated_at);
@@ -50,7 +50,14 @@ function getHistoryImageForDate(dateStr, history) {
     else break;
   }
   if (!match) return null;
-  return getCharacterImage(match.name, match.level);
+  // 해당 캐릭터의 그날 레벨 계산
+  let level = 1;
+  for (const lh of (levelHistory ?? [])) {
+    if (lh.character_id !== match.character_id) continue;
+    const d = lh.leveled_up_at?.slice?.(0, 10) ?? String(lh.leveled_up_at);
+    if (d <= dateStr) level = lh.level;
+  }
+  return getCharacterImage(match.name, level);
 }
 
 function HabitGrass({ title, year, month, calendar, calendarData }) {
@@ -83,10 +90,11 @@ function HabitGrass({ title, year, month, calendar, calendarData }) {
               let image = null;
               if (done && calendarData) {
                 if (calendarData.mode === 'history') {
-                  image = getHistoryImageForDate(dateStr, calendarData.history ?? []);
+                  image = getHistoryImageForDate(dateStr, calendarData.history ?? [], calendarData.levelHistory ?? []);
                 } else {
-                  const level = getLevelForDate(dateStr, calendarData.levelHistory ?? []);
-                  image = calendarData.character ? getCharacterImage(calendarData.character.name, level) : null;
+                  image = calendarData.character
+                    ? getCharacterImage(calendarData.character.name, calendarData.fixedLevel ?? 1)
+                    : null;
                 }
               }
               return (
@@ -148,9 +156,9 @@ export default function CalendarScreen() {
     if (res) setCalendarData(res.data);
   };
 
-  const handleSetFixed = (characterId) => async () => {
+  const handleSetFixed = (characterId, level) => async () => {
     setCharPickerVisible(false);
-    await api.patch('/characters/calendar', { mode: 'fixed', character_id: characterId }).catch(() => {});
+    await api.patch('/characters/calendar', { mode: 'fixed', character_id: characterId, level }).catch(() => {});
     const res = await api.get('/characters/calendar').catch(() => null);
     if (res) setCalendarData(res.data);
   };
@@ -212,18 +220,39 @@ export default function CalendarScreen() {
         </TouchableOpacity>
       </Modal>
 
-      {/* 고정 아이콘 캐릭터 선택 */}
-      <Modal visible={charPickerVisible} transparent animationType="fade" onRequestClose={() => setCharPickerVisible(false)}>
-        <TouchableOpacity style={styles.menuOverlay} activeOpacity={1} onPress={() => setCharPickerVisible(false)}>
-          <View style={styles.pickerCard}>
+      {/* 고정 아이콘 캐릭터+레벨 선택 */}
+      <Modal visible={charPickerVisible} transparent animationType="slide" onRequestClose={() => setCharPickerVisible(false)}>
+        <TouchableOpacity style={styles.pickerOverlay} activeOpacity={1} onPress={() => setCharPickerVisible(false)}>
+          <TouchableOpacity activeOpacity={1} style={styles.pickerCard}>
             <Text style={styles.pickerTitle}>캐릭터 선택</Text>
-            {ownedChars.map(c => (
-              <TouchableOpacity key={c.character_id} style={styles.pickerItem} onPress={handleSetFixed(c.character_id)}>
-                <Image source={getCharacterImage(c.name, c.level)} style={styles.pickerImage} />
-                <Text style={styles.pickerName}>{c.name} Lv.{c.level}</Text>
-              </TouchableOpacity>
-            ))}
-          </View>
+            {ownedChars.map(c => {
+              const maxLevel = c.level;
+              return (
+                <View key={c.character_id} style={styles.pickerRow}>
+                  <Text style={styles.pickerCharName}>{c.name}</Text>
+                  <View style={styles.pickerLevels}>
+                    {Array.from({ length: 7 }, (_, i) => i + 1).map(lv => {
+                      const available = lv <= maxLevel;
+                      const img = available ? getCharacterImage(c.name, lv) : null;
+                      return (
+                        <TouchableOpacity
+                          key={lv}
+                          onPress={available ? handleSetFixed(c.character_id, lv) : undefined}
+                          disabled={!available}
+                          style={[styles.pickerLvCell, !available && styles.pickerLvCellEmpty]}
+                        >
+                          {img
+                            ? <Image source={img} style={styles.pickerLvImage} />
+                            : <View style={styles.pickerLvPlaceholder} />
+                          }
+                        </TouchableOpacity>
+                      );
+                    })}
+                  </View>
+                </View>
+              );
+            })}
+          </TouchableOpacity>
         </TouchableOpacity>
       </Modal>
     </SafeAreaView>
@@ -291,11 +320,16 @@ const styles = StyleSheet.create({
   menuItemText: { fontSize: typography.md, fontFamily: fontFamily.regular, color: colors.textMain },
   menuItemActive: { fontFamily: fontFamily.bold, color: colors.lavenderDark },
   menuDivider: { height: 1, backgroundColor: colors.border, marginHorizontal: spacing.md },
-  pickerCard: { backgroundColor: colors.surface, borderRadius: radius.lg, borderWidth: 1.5, borderColor: colors.border, overflow: 'hidden', minWidth: 200, padding: spacing.md, gap: spacing.sm },
-  pickerTitle: { fontSize: typography.md, fontFamily: fontFamily.bold, color: colors.textMain, marginBottom: spacing.xs },
-  pickerItem: { flexDirection: 'row', alignItems: 'center', gap: spacing.sm, paddingVertical: spacing.xs },
-  pickerImage: { width: 36, height: 36, resizeMode: 'contain' },
-  pickerName: { fontSize: typography.md, fontFamily: fontFamily.regular, color: colors.textMain },
+  pickerOverlay: { flex: 1, backgroundColor: 'rgba(0,0,0,0.4)', justifyContent: 'flex-end' },
+  pickerCard: { backgroundColor: colors.surface, borderTopLeftRadius: radius.xl, borderTopRightRadius: radius.xl, padding: spacing.lg, gap: spacing.md, paddingBottom: spacing.xxl },
+  pickerTitle: { fontSize: typography.lg, fontFamily: fontFamily.bold, color: colors.textMain, marginBottom: spacing.xs },
+  pickerRow: { flexDirection: 'row', alignItems: 'center', gap: spacing.sm },
+  pickerCharName: { fontSize: typography.sm, fontFamily: fontFamily.bold, color: colors.textMain, width: 36 },
+  pickerLevels: { flexDirection: 'row', gap: 6, flex: 1 },
+  pickerLvCell: { width: 36, height: 36, borderRadius: radius.sm, overflow: 'hidden' },
+  pickerLvCellEmpty: { opacity: 0.2 },
+  pickerLvImage: { width: 36, height: 36, resizeMode: 'contain' },
+  pickerLvPlaceholder: { width: 36, height: 36, backgroundColor: colors.inactive, borderRadius: radius.sm },
 
   emptyText: {
     textAlign: 'center',

@@ -4,7 +4,7 @@ import {
   StyleSheet, SafeAreaView, Image, RefreshControl, AppState, Alert, BackHandler,
 } from 'react-native';
 import { Swipeable } from 'react-native-gesture-handler';
-import { useNavigation } from '@react-navigation/native';
+import { useNavigation, useIsFocused } from '@react-navigation/native';
 import { colors, typography, fontFamily, spacing, radius, shadow } from '../theme';
 import Header from '../components/Header';
 import Avatar from '../components/Avatar';
@@ -22,6 +22,7 @@ import { useRewardedAd } from '../hooks/useRewardedAd';
 
 export default function HomeScreen() {
   const navigation = useNavigation();
+  const isFocused = useIsFocused();
   const [habits, setHabits] = useState([]);
   const [allChallenges, setAllChallenges] = useState([]);
   const [showAll, setShowAll] = useState(false);
@@ -87,6 +88,9 @@ export default function HomeScreen() {
 
   // 최초 1회 로드
   useEffect(() => { fetchToday(); }, [fetchToday]);
+
+  // 탭 벗어나면 메뉴 닫기
+  useEffect(() => { if (!isFocused) setHeaderMenuVisible(false); }, [isFocused]);
 
   // 앱이 백그라운드에서 포그라운드로 돌아올 때 날짜 바뀌었으면 새로고침
   // toLocaleDateString 대신 KST 기준 YYYY-MM-DD 포맷 사용 (백엔드와 동일 기준)
