@@ -254,7 +254,7 @@ async function getCalendar(req, res) {
       `SELECT l.log_date, l.challenge_id, l.is_done, c.title, c.category
        FROM logs l
        JOIN challenges c ON l.challenge_id = c.id
-       WHERE c.user_id = ? AND l.log_date LIKE ?
+       WHERE c.user_id = ? AND l.log_date LIKE ? AND l.deleted_at IS NULL
        ORDER BY l.log_date ASC`,
       [userId, `${yearMonth}-%`]
     );

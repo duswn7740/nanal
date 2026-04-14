@@ -207,8 +207,8 @@ async function deleteChallenge(req, res) {
     }
 
     if (mode === 'all') {
-      // 과거 로그 전체 삭제 후 비활성화
-      await pool.query('DELETE FROM logs WHERE challenge_id = ?', [challengeId]);
+      // 과거 로그 소프트 삭제 후 비활성화
+      await pool.query('UPDATE logs SET deleted_at = NOW() WHERE challenge_id = ?', [challengeId]);
     }
 
     // 오늘부터 비활성화 (두 모드 공통)

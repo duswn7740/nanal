@@ -1,6 +1,20 @@
 const bcrypt = require('bcrypt');
 const jwt = require('jsonwebtoken');
+const nodemailer = require('nodemailer');
 const pool = require('../config/db');
+
+const transporter = nodemailer.createTransport({
+  service: 'gmail',
+  auth: {
+    user: process.env.MAIL_USER,
+    pass: process.env.MAIL_PASS,
+  },
+});
+
+function generateTempPassword() {
+  const chars = 'ABCDEFGHJKLMNPQRSTUVWXYZabcdefghjkmnpqrstuvwxyz23456789';
+  return Array.from({ length: 10 }, () => chars[Math.floor(Math.random() * chars.length)]).join('');
+}
 
 function generateToken(userId, email, nickname) {
   return jwt.sign(
@@ -143,6 +157,61 @@ async function updateNickname(req, res) {
   }
 }
 
+// POST /api/auth/forgot-password
+async function forgotPassword(req, res) {
+  const { email } = req.body;
+  if (!email) return res.status(400).json({ message: '이메일을 입력해주세요.' });
+
+  try {
+    const [rows] = await pool.query(
+      'SELECT id FROM users WHERE email = ? AND deleted_at IS NULL',
+      [email]
+    );
+    if (rows.length === 0) {
+      return res.status(404).json({ message: '가입된 이메일이 아닙니다.' });
+    }
+
+    const tempPassword = generateTempPassword();
+    const password_hash = await bcrypt.hash(tempPassword, 10);
+    await pool.query('UPDATE users SET password_hash = ? WHERE id = ?', [password_hash, rows[0].id]);
+
+    await transporter.sendMail({
+      from: `"나날 습관트래커" <${process.env.MAIL_USER}>`,
+      to: email,
+      subject: '[나날] 임시 비밀번호 안내',
+      text: `안녕하세요, 나날입니다.\n\n임시 비밀번호: ${tempPassword}\n\n로그인 후 반드시 비밀번호를 변경해주세요.`,
+    });
+
+    return res.json({ message: '임시 비밀번호가 이메일로 발송되었습니다.' });
+  } catch (err) {
+    console.error('forgotPassword error:', err);
+    return res.status(500).json({ message: '서버 오류가 발생했습니다.' });
+  }
+}
+
+// PATCH /api/auth/password
+async function updatePassword(req, res) {
+  const { currentPassword, newPassword } = req.body;
+  if (!currentPassword || !newPassword) {
+    return res.status(400).json({ message: '현재 비밀번호와 새 비밀번호를 입력해주세요.' });
+  }
+  if (newPassword.length < 8) {
+    return res.status(400).json({ message: '비밀번호는 8자 이상이어야 합니다.' });
+  }
+  try {
+    const [[user]] = await pool.query('SELECT password_hash FROM users WHERE id = ?', [req.user.userId]);
+    const isMatch = await bcrypt.compare(currentPassword, user.password_hash);
+    if (!isMatch) return res.status(401).json({ message: '현재 비밀번호가 올바르지 않습니다.' });
+
+    const password_hash = await bcrypt.hash(newPassword, 10);
+    await pool.query('UPDATE users SET password_hash = ? WHERE id = ?', [password_hash, req.user.userId]);
+    return res.json({ message: '비밀번호가 변경되었습니다.' });
+  } catch (err) {
+    console.error('updatePassword error:', err);
+    return res.status(500).json({ message: '서버 오류가 발생했습니다.' });
+  }
+}
+
 // DELETE /api/auth/withdraw
 async function withdraw(req, res) {
   const userId = req.user.userId;
@@ -155,4 +224,4 @@ async function withdraw(req, res) {
   }
 }
 
-module.exports = { signup, login, me, updateNickname, withdraw };
+module.exports = { signup, login, me, updateNickname, withdraw, forgotPassword, updatePassword };
