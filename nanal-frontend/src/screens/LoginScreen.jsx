@@ -97,6 +97,9 @@ export default function LoginScreen({ navigation }) {
               <Text style={styles.signupLink}>회원가입</Text>
             </TouchableOpacity>
           </View>
+          <TouchableOpacity onPress={() => navigation.navigate('ForgotPassword')} style={styles.forgotRow}>
+            <Text style={styles.forgotText}>비밀번호를 잊으셨나요?</Text>
+          </TouchableOpacity>
         </ScrollView>
       </KeyboardAvoidingView>
     </SafeAreaView>
@@ -164,5 +167,14 @@ const styles = StyleSheet.create({
     fontSize: typography.sm,
     fontFamily: fontFamily.bold,
     color: colors.lavenderDark,
+  },
+  forgotRow: {
+    alignItems: 'center',
+  },
+  forgotText: {
+    fontSize: typography.sm,
+    fontFamily: fontFamily.regular,
+    color: colors.textSub,
+    textDecorationLine: 'underline',
   },
 });

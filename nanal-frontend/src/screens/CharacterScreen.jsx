@@ -206,6 +206,9 @@ export default function CharacterScreen() {
                     <Image source={require('../../assets/icons/coin.png')} style={styles.priceIcon} />
                     <Text style={styles.priceText}>{char.price}</Text>
                   </View>
+                  <View style={[styles.ownedBadge, styles.buyBadge]}>
+                    <Text style={[styles.ownedBadgeText, { color: colors.surface }]}>구매</Text>
+                  </View>
                 </TouchableOpacity>
               );
             }
@@ -223,7 +226,7 @@ export default function CharacterScreen() {
                 <Text style={styles.charLevel}>Lv.{level}</Text>
                 <View style={[styles.ownedBadge, isActive && styles.activeBadge]}>
                   <Text style={[styles.ownedBadgeText, isActive && { color: colors.surface }]}>
-                    {isActive ? '메인' : '보유중'}
+                    {isActive ? '메인' : '보유'}
                   </Text>
                 </View>
               </TouchableOpacity>
@@ -328,6 +331,9 @@ const styles = StyleSheet.create({
   },
   activeBadge: {
     backgroundColor: colors.lavenderDark, borderColor: colors.lavenderDark,
+  },
+  buyBadge: {
+    backgroundColor: colors.rose, borderColor: colors.rose,
   },
   ownedBadgeText: { fontSize: typography.xs, fontFamily: fontFamily.bold, color: colors.textSub },
 

@@ -27,6 +27,11 @@ export default function SettingsScreen() {
   const [nicknameError, setNicknameError] = useState('');
   const [loading, setLoading] = useState(false);
   const [policyType, setPolicyType] = useState(null); // 'terms' | 'privacy' | null
+  const [pwModal, setPwModal] = useState(false);
+  const [currentPw, setCurrentPw] = useState('');
+  const [newPw, setNewPw] = useState('');
+  const [pwError, setPwError] = useState('');
+  const [pwLoading, setPwLoading] = useState(false);
 
   const handleLogout = () => {
     Alert.alert('로그아웃', '정말 로그아웃할까요?', [
@@ -39,6 +44,26 @@ export default function SettingsScreen() {
     setNickname(user?.nickname ?? '');
     setNicknameError('');
     setNicknameModal(true);
+  };
+
+  const openPwModal = () => {
+    setCurrentPw(''); setNewPw(''); setPwError('');
+    setPwModal(true);
+  };
+
+  const handlePwSubmit = async () => {
+    if (!currentPw || !newPw) { setPwError('모두 입력해주세요.'); return; }
+    if (newPw.length < 8) { setPwError('새 비밀번호는 8자 이상이어야 해요.'); return; }
+    setPwLoading(true);
+    try {
+      await api.patch('/auth/password', { currentPassword: currentPw, newPassword: newPw });
+      setPwModal(false);
+      Alert.alert('완료', '비밀번호가 변경되었어요.');
+    } catch (err) {
+      setPwError(err.response?.data?.message ?? '변경에 실패했어요.');
+    } finally {
+      setPwLoading(false);
+    }
   };
 
   const handleNicknameSubmit = async () => {
@@ -68,6 +93,8 @@ export default function SettingsScreen() {
             </View>
             <View style={styles.divider} />
             <SettingRow label="닉네임 변경" onPress={openNicknameModal} />
+            <View style={styles.divider} />
+            <SettingRow label="비밀번호 변경" onPress={openPwModal} />
             <View style={styles.divider} />
             <SettingRow label="로그아웃" onPress={handleLogout} danger />
           </View>
@@ -111,6 +138,22 @@ export default function SettingsScreen() {
         type={policyType}
         onClose={() => setPolicyType(null)}
       />
+
+      {/* 비밀번호 변경 모달 */}
+      <Modal visible={pwModal} transparent animationType="fade" onRequestClose={() => setPwModal(false)}>
+        <KeyboardAvoidingView style={styles.modalOverlay} behavior={Platform.OS === 'ios' ? 'padding' : 'height'}>
+          <View style={styles.modalCard}>
+            <Text style={styles.modalTitle}>비밀번호 변경</Text>
+            <Input value={currentPw} onChangeText={setCurrentPw} placeholder="현재 비밀번호" secureTextEntry autoFocus />
+            <Input value={newPw} onChangeText={setNewPw} placeholder="새 비밀번호 (8자 이상)" secureTextEntry />
+            {pwError ? <Text style={styles.modalError}>{pwError}</Text> : null}
+            <View style={styles.modalButtons}>
+              <Button label="취소" variant="ghost" onPress={() => setPwModal(false)} style={styles.modalBtn} />
+              <Button label="변경" onPress={handlePwSubmit} loading={pwLoading} style={styles.modalBtn} />
+            </View>
+          </View>
+        </KeyboardAvoidingView>
+      </Modal>
 
       {/* 닉네임 변경 모달 */}
       <Modal visible={nicknameModal} transparent animationType="fade" onRequestClose={() => setNicknameModal(false)}>
@@ -238,4 +281,8 @@ const styles = StyleSheet.create({
   },
   modalButtons: { flexDirection: 'row', gap: spacing.sm },
   modalBtn: { flex: 1 },
+  modalError: {
+    fontSize: typography.sm, fontFamily: fontFamily.regular,
+    color: colors.error, textAlign: 'center',
+  },
 });

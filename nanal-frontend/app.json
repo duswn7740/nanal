@@ -45,9 +45,10 @@
         }
       ]
     ],
+    "owner": "rollinpebbles",
     "extra": {
       "eas": {
-        "projectId": "bebfa546-c7ad-4dd6-a270-e5350df8a776"
+        "projectId": "695a39dd-a1b7-42ea-8b35-694d8c9c9d4b"
       }
     }
   }

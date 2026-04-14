@@ -112,7 +112,7 @@ export default function SignupScreen({ navigation }) {
               label="비밀번호"
               value={password}
               onChangeText={setPassword}
-              placeholder="6자 이상 입력해줘요"
+              placeholder="8자 이상 입력해줘요"
               secureTextEntry
               error={errors.password}
             />

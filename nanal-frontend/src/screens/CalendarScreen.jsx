@@ -125,14 +125,25 @@ export default function CalendarScreen() {
   const fetchData = useCallback(async (y, m) => {
     setLoading(true);
     try {
-      const [calRes, challengeRes, calCharRes, ownedRes] = await Promise.all([
+      const [calRes, calCharRes, ownedRes] = await Promise.all([
         api.get('/logs/calendar', { params: { year: y, month: m } }),
-        api.get('/challenges'),
         api.get('/characters/calendar'),
         api.get('/characters'),
       ]);
-      setCalendar(calRes.data.calendar);
-      setHabits(challengeRes.data.challenges);
+      const calData = calRes.data.calendar;
+      setCalendar(calData);
+      // 해당 월 로그에 등장하는 습관 title 목록 (삭제된 습관도 포함, 전체삭제는 로그 소프트딜리트라 제외됨)
+      const titleSet = new Set();
+      const habitList = [];
+      for (const logs of Object.values(calData)) {
+        for (const log of logs) {
+          if (!titleSet.has(log.title)) {
+            titleSet.add(log.title);
+            habitList.push({ id: log.challenge_id, title: log.title });
+          }
+        }
+      }
+      setHabits(habitList);
       setCalendarData(calCharRes.data);
       setOwnedChars((ownedRes.data.characters ?? []).filter(c => c.is_purchased || c.is_active));
     } catch {

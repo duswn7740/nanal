@@ -26,6 +26,15 @@ export const CHARACTER_IMAGES = {
     6: require('../../assets/avatar/chick_lv6.png'),
     7: require('../../assets/avatar/chick_lv7.png'),
   },
+  토끼: {
+    1: require('../../assets/avatar/rabbit_lv1.png'),
+    2: require('../../assets/avatar/rabbit_lv2.png'),
+    3: require('../../assets/avatar/rabbit_lv3.png'),
+    4: require('../../assets/avatar/rabbit_lv4.png'),
+    5: require('../../assets/avatar/rabbit_lv5.png'),
+    6: require('../../assets/avatar/rabbit_lv6.png'),
+    7: require('../../assets/avatar/rabbit_lv7.png'),
+  },
 };
 
 // 이미지가 없는 레벨은 가장 가까운 낮은 레벨로 fallback (이미지 제작 순차 추가 대응)

@@ -561,7 +561,7 @@ const styles = StyleSheet.create({
   scroll: { flex: 1 },
   scrollContent: { paddingBottom: 100 },
 
-  editModeBtn: { fontSize: typography.sm, fontFamily: fontFamily.regular, color: colors.textSub },
+  editModeBtn: { fontSize: typography.xl, color: colors.textMain, letterSpacing: 1 },
 
   characterSection: {
     alignSelf: 'stretch',
