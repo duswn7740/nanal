@@ -19,7 +19,7 @@
         "backgroundColor": "#F9F9F9",
         "foregroundImage": "./assets/icons/icon.png"
       },
-      "package": "com.y83849455.nanal",
+      "package": "com.rollinpebbles.nanal",
       "usesCleartextTraffic": true,
       "permissions": [
         "SCHEDULE_EXACT_ALARM",
