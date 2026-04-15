@@ -58,7 +58,7 @@ export default function LoginScreen({ navigation }) {
           showsVerticalScrollIndicator={false}
         >
           <View style={styles.logoArea}>
-            <Avatar size="lg" />
+            <Avatar size="lg" image={require('../../assets/icons/loginicon.png')} />
             <Text style={styles.appName}>나날이</Text>
             <Text style={styles.appSub}>매일 조금씩, 새싹이와 함께</Text>
           </View>

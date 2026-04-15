@@ -5,7 +5,6 @@
  *   1. createMissedLogs   - 어제 체크인 안 한 챌린지에 is_done=false 로그 자동 생성
  *   2. resetMissedStreaks  - 미달성 챌린지의 current_streak를 0으로 초기화
  *   3. updateSproutStates - 유저별 새싹이 상태(sprout_state) 업데이트
- *   4. updateMonthlyStats - 월간 달성률 통계 갱신
  *
  * 왜 이렇게 나눠서 실행하나?
  *   각 단계가 명확히 분리되어 있어 특정 단계에서 오류가 나도 원인을 빠르게 찾을 수 있습니다.
@@ -30,7 +29,6 @@ function scheduleMidnightCron() {
       await createMissedLogs(yesterday);
       await resetMissedStreaks(yesterday);
       await updateSproutStates(yesterday);
-      await updateMonthlyStats(yesterday);
       console.log('[cron] 자정 작업 완료');
     } catch (err) {
       console.error('[cron] 자정 작업 오류:', err);
@@ -116,42 +114,6 @@ async function updateSproutStates(yesterday) {
     [yesterday]
   );
   console.log(`[cron] 새싹이 상태 업데이트: ${result.affectedRows}명`);
-}
-
-/**
- * Step 4: 월간 달성률 통계 갱신
- *
- * 어제 날짜가 속한 달의 통계를 재계산해서 monthly_stats에 upsert합니다.
- * ON DUPLICATE KEY UPDATE를 쓰면 이미 해당 월 데이터가 있어도 값을 갱신합니다.
- *
- * 계산 방식:
- *   done_days  = 해당 달에 is_done=true인 로그 수
- *   total_days = 해당 달의 전체 로그 수 (완료+미완료)
- *   rate       = done_days / total_days * 100 (소수점 2자리)
- */
-async function updateMonthlyStats(yesterday) {
-  const yearMonth = yesterday.slice(0, 7); // 'YYYY-MM'
-
-  const [result] = await pool.query(
-    `INSERT INTO monthly_stats (user_id, stat_year_month, done_days, total_days, rate)
-     SELECT
-       c.user_id,
-       ?                                                                AS stat_year_month,
-       SUM(CASE WHEN l.is_done = TRUE THEN 1 ELSE 0 END)               AS done_days,
-       COUNT(*)                                                          AS total_days,
-       ROUND(SUM(CASE WHEN l.is_done = TRUE THEN 1 ELSE 0 END)
-             / COUNT(*) * 100, 2)                                       AS rate
-     FROM logs l
-     JOIN challenges c ON l.challenge_id = c.id
-     WHERE l.log_date LIKE ?
-     GROUP BY c.user_id
-     ON DUPLICATE KEY UPDATE
-       done_days  = VALUES(done_days),
-       total_days = VALUES(total_days),
-       rate       = VALUES(rate)`,
-    [yearMonth, `${yearMonth}-%`]
-  );
-  console.log(`[cron] 월간 통계 갱신: ${result.affectedRows}건 (${yearMonth})`);
 }
 
 module.exports = { scheduleMidnightCron };
