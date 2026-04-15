@@ -1,15 +1,13 @@
 import React, { useState, useCallback, useEffect, useMemo, useRef } from 'react';
 import {
-  View, Text, ScrollView, TouchableOpacity, Modal,
-  StyleSheet, SafeAreaView, Image, RefreshControl, AppState, Alert, BackHandler,
+  View, Text, Image, ScrollView, TouchableOpacity,
+  StyleSheet, SafeAreaView, RefreshControl, AppState, Alert, BackHandler,
 } from 'react-native';
-import { Swipeable } from 'react-native-gesture-handler';
 import { useNavigation, useIsFocused } from '@react-navigation/native';
-import { colors, typography, fontFamily, spacing, radius, shadow } from '../theme';
+import { colors, typography, fontFamily, spacing, radius } from '../theme';
 import Header from '../components/Header';
 import Avatar from '../components/Avatar';
 import ProgressBar from '../components/ProgressBar';
-import CheckButton from '../components/CheckButton';
 import EmptyState from '../components/EmptyState';
 import api from '../api';
 import { getCharacterImage } from '../constants/characterImages';
@@ -17,6 +15,8 @@ import DraggableFlatList, { ScaleDecorator } from 'react-native-draggable-flatli
 import AddHabitModal from './AddHabitModal';
 import EditHabitModal from './EditHabitModal';
 import GiftBoxModal from './GiftBoxModal';
+import XpModal from './XpModal';
+import HabitItem from '../components/HabitItem';
 import { rescheduleAllHabits, scheduleHabitNotifications, cancelHabitNotifications } from '../utils/notifications';
 import { useRewardedAd } from '../hooks/useRewardedAd';
 
@@ -334,6 +334,7 @@ export default function HomeScreen() {
             data={editSorted}
             keyExtractor={item => String(item.challenge_id)}
             onDragEnd={handleReorder}
+            style={styles.draggableList}
             contentContainerStyle={styles.habitSection}
             renderItem={({ item, drag, isActive }) => (
               <ScaleDecorator activeScale={1.03}>
@@ -475,86 +476,6 @@ function CharacterHeader({ character, doneCount, habitsLength }) {
   );
 }
 
-function XpModal({ visible, xp, allDone, adDone, onClose, onWatchAd }) {
-
-  return (
-    <Modal visible={visible} transparent animationType="fade" onRequestClose={onClose}>
-      <TouchableOpacity style={styles.xpOverlay} activeOpacity={1} onPress={onClose}>
-        <TouchableOpacity activeOpacity={1} style={styles.xpCard}>
-          <Text style={styles.xpTitle}>🎉 경험치 획득!</Text>
-          <Text style={styles.xpAmount}>+{xp} XP</Text>
-          {allDone && (
-            <View style={styles.xpBonusBadge}>
-              <Text style={styles.xpBonusText}>보너스 포함</Text>
-            </View>
-          )}
-          {adDone ? (
-            <View style={styles.xpAdDoneBadge}>
-              <Text style={styles.xpAdDoneText}>✓ 광고 보상 획득 완료!</Text>
-            </View>
-          ) : (
-            <TouchableOpacity style={styles.xpAdBtn} onPress={onWatchAd} activeOpacity={0.8}>
-              <Text style={styles.xpAdBtnText}>📺 광고 보고 2배 받기</Text>
-            </TouchableOpacity>
-          )}
-          <TouchableOpacity style={styles.xpCloseBtn} onPress={onClose} activeOpacity={0.8}>
-            <Text style={styles.xpCloseBtnText}>나가기</Text>
-          </TouchableOpacity>
-        </TouchableOpacity>
-      </TouchableOpacity>
-    </Modal>
-  );
-}
-
-function HabitItem({ habit, onCheck, editMode, onEdit, onSwipeOpen, drag, isActive, disabled }) {
-  const swipeableRef = useRef(null);
-  const done = !!habit.is_done;
-
-  if (editMode) {
-    return (
-      <View style={[styles.habitCard, isActive && styles.habitItemDragging]}>
-        <View style={styles.habitCardContent}>
-          <CheckButton done={false} size={44} />
-          <View style={styles.habitInfo}>
-            {habit.habit_time && <Text style={styles.habitTime}>{habit.habit_time}</Text>}
-            <Text style={styles.habitTitle}>{habit.title}</Text>
-          </View>
-          <TouchableOpacity onLongPress={drag} delayLongPress={0} style={styles.dragHandle}>
-            <Text style={styles.dragIcon}>☰</Text>
-          </TouchableOpacity>
-        </View>
-      </View>
-    );
-  }
-
-  const renderRightActions = () => (
-    <TouchableOpacity
-      style={styles.swipeAction}
-      onPress={() => { swipeableRef.current?.close(); onEdit(habit); }}
-    >
-      <Image source={require('../../assets/icons/edit.png')} style={styles.swipeActionIcon} />
-    </TouchableOpacity>
-  );
-
-  return (
-    <Swipeable
-      ref={swipeableRef}
-      renderRightActions={renderRightActions}
-      overshootRight={false}
-      onSwipeableWillOpen={() => onSwipeOpen?.(swipeableRef.current)}
-      containerStyle={[styles.habitCard, (done || disabled) && styles.habitItemDone]}
-    >
-      <View style={styles.habitCardContent}>
-        <CheckButton done={disabled ? false : done} onPress={disabled ? undefined : () => onCheck(habit.challenge_id, done)} size={44} />
-        <View style={styles.habitInfo}>
-          {habit.habit_time && <Text style={styles.habitTime}>{habit.habit_time}</Text>}
-          <Text style={[styles.habitTitle, (done && !disabled) && styles.habitTitleDone]}>{habit.title}</Text>
-        </View>
-      </View>
-    </Swipeable>
-  );
-}
-
 const styles = StyleSheet.create({
   safeArea: { flex: 1, backgroundColor: colors.background },
   center: { flex: 1, justifyContent: 'center', alignItems: 'center', paddingHorizontal: spacing.xl },
@@ -578,27 +499,6 @@ const styles = StyleSheet.create({
     gap: spacing.sm,
   },
 
-  habitCard: {
-    backgroundColor: colors.surface,
-    borderRadius: radius.lg,
-    borderWidth: 1,
-    borderColor: colors.border,
-    overflow: 'hidden',
-    ...shadow.sm,
-  },
-  habitCardContent: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: spacing.md,
-    padding: spacing.md,
-    backgroundColor: colors.surface,
-  },
-  habitItem: { flexDirection: 'row', alignItems: 'center', gap: spacing.md },
-  habitItemDone: { opacity: 0.5 },
-  habitInfo: { flex: 1, flexDirection: 'row', alignItems: 'center', gap: spacing.sm },
-  habitTime: { fontSize: typography.sm, fontFamily: fontFamily.bold, color: colors.lavenderDark },
-  habitTitle: { fontSize: typography.md, fontFamily: fontFamily.regular, color: colors.textMain, flex: 1 },
-  habitTitleDone: { textDecorationLine: 'line-through', color: colors.textSub },
 
   fab: {
     position: 'absolute',
@@ -608,12 +508,6 @@ const styles = StyleSheet.create({
   },
   fabIcon: { width: 56, height: 56, resizeMode: 'contain' },
 
-  dragHandle: { padding: spacing.sm, justifyContent: 'center', alignItems: 'center' },
-  dragIcon: { fontSize: typography.lg, color: colors.textSub },
-  habitItemDragging: {
-    opacity: 0.8,
-    elevation: 8,
-  },
   draggableList: { flex: 1 },
 
   menuOverlay: {
@@ -639,14 +533,6 @@ const styles = StyleSheet.create({
   menuDivider: { height: 1, backgroundColor: colors.border, marginHorizontal: spacing.sm },
   headerMenuCard: { top: 52 },
 
-  swipeAction: {
-    width: 64,
-    justifyContent: 'center',
-    alignItems: 'center',
-    backgroundColor: colors.lavenderLight,
-  },
-  swipeActionIcon: { width: 32, height: 32, resizeMode: 'contain' },
-
   retryButton: {
     marginTop: spacing.md,
     paddingHorizontal: spacing.lg,
@@ -656,48 +542,4 @@ const styles = StyleSheet.create({
   },
   retryText: { fontSize: typography.sm, fontFamily: fontFamily.bold, color: colors.textMain },
 
-  xpOverlay: {
-    flex: 1, backgroundColor: 'rgba(0,0,0,0.4)',
-    justifyContent: 'center', paddingHorizontal: spacing.xl,
-  },
-  xpCard: {
-    backgroundColor: colors.surface, borderRadius: radius.lg,
-    padding: spacing.xl, alignItems: 'center', gap: spacing.md,
-  },
-  xpTitle: {
-    fontSize: typography.lg, fontFamily: fontFamily.bold, color: colors.textMain,
-  },
-  xpAmount: {
-    fontSize: 40, fontFamily: fontFamily.bold, color: colors.lavenderDark,
-  },
-  xpBonusBadge: {
-    backgroundColor: colors.lavenderLight, borderRadius: radius.full,
-    paddingHorizontal: spacing.md, paddingVertical: spacing.xs,
-  },
-  xpBonusText: {
-    fontSize: typography.xs, fontFamily: fontFamily.bold, color: colors.lavenderDark,
-  },
-  xpAdBtn: {
-    width: '100%', backgroundColor: colors.lavender,
-    borderRadius: radius.lg, paddingVertical: spacing.md,
-    alignItems: 'center', marginTop: spacing.sm,
-  },
-  xpAdBtnText: {
-    fontSize: typography.md, fontFamily: fontFamily.bold, color: colors.surface,
-  },
-  xpAdDoneBadge: {
-    width: '100%', backgroundColor: colors.lavenderLight,
-    borderRadius: radius.lg, paddingVertical: spacing.md,
-    alignItems: 'center', marginTop: spacing.sm,
-  },
-  xpAdDoneText: {
-    fontSize: typography.md, fontFamily: fontFamily.bold, color: colors.lavenderDark,
-  },
-  xpCloseBtn: {
-    width: '100%', borderRadius: radius.lg, paddingVertical: spacing.md,
-    alignItems: 'center', borderWidth: 1, borderColor: colors.border,
-  },
-  xpCloseBtnText: {
-    fontSize: typography.md, fontFamily: fontFamily.regular, color: colors.textSub,
-  },
 });

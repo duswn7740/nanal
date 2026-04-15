@@ -3,18 +3,18 @@ import {
   View, Text, ScrollView, TouchableOpacity, Modal, Image,
   SafeAreaView, StyleSheet, ActivityIndicator, Dimensions,
 } from 'react-native';
-import ConfirmModal from '../components/ConfirmModal';
-
-const GRID_PADDING = 16; // spacing.md
-const GRID_GAP = 8;      // spacing.sm
-const CARD_WIDTH = (Dimensions.get('window').width - GRID_PADDING * 2 - GRID_GAP * 2) / 3;
 import { useFocusEffect } from '@react-navigation/native';
 import { colors, typography, fontFamily, spacing, radius } from '../theme';
 import Header from '../components/Header';
 import Avatar from '../components/Avatar';
 import ProgressBar from '../components/ProgressBar';
+import ConfirmModal from '../components/ConfirmModal';
 import api from '../api';
 import { getCharacterImage } from '../constants/characterImages';
+
+const GRID_PADDING = 16; // spacing.md
+const GRID_GAP = 8;      // spacing.sm
+const CARD_WIDTH = (Dimensions.get('window').width - GRID_PADDING * 2 - GRID_GAP * 2) / 3;
 
 const LEVEL_THRESHOLDS = [0, 100, 220, 360, 520, 700, 900];
 const MAX_LEVEL = 7;
