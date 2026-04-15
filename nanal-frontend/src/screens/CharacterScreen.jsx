@@ -1,8 +1,9 @@
 import React, { useState, useCallback } from 'react';
 import {
   View, Text, ScrollView, TouchableOpacity, Modal, Image,
-  SafeAreaView, StyleSheet, ActivityIndicator, Alert, Dimensions,
+  SafeAreaView, StyleSheet, ActivityIndicator, Dimensions,
 } from 'react-native';
+import ConfirmModal from '../components/ConfirmModal';
 
 const GRID_PADDING = 16; // spacing.md
 const GRID_GAP = 8;      // spacing.sm
@@ -38,6 +39,12 @@ export default function CharacterScreen() {
   const [loading, setLoading] = useState(false);
   const [buying, setBuying] = useState(null);
   const [xpModalVisible, setXpModalVisible] = useState(false);
+  const [confirmModal, setConfirmModal] = useState({ visible: false, title: '', message: '', confirmText: '확인', cancelText: undefined, onConfirm: null });
+  const [alertModal, setAlertModal] = useState({ visible: false, title: '', message: '' });
+
+  const showAlert = (title, message) => setAlertModal({ visible: true, title, message });
+  const showConfirm = (title, message, confirmText, onConfirm) =>
+    setConfirmModal({ visible: true, title, message, confirmText, cancelText: '취소', onConfirm });
 
   const fetchData = useCallback(async () => {
     setLoading(true);
@@ -69,47 +76,35 @@ export default function CharacterScreen() {
 
   const handleSetActive = (ucId, name) => {
     if (active?.id === ucId) return;
-    Alert.alert('메인 캐릭터 변경', `${name}을(를) 메인 캐릭터로 설정할까요?`, [
-      { text: '취소', style: 'cancel' },
-      {
-        text: '변경', onPress: async () => {
-          try {
-            await api.patch(`/characters/${ucId}/active`);
-            await fetchData();
-          } catch {
-            Alert.alert('변경에 실패했어요.');
-          }
-        },
-      },
-    ]);
+    showConfirm('메인 캐릭터 변경', `${name}을(를) 메인 캐릭터로 설정할까요?`, '변경', async () => {
+      setConfirmModal(m => ({ ...m, visible: false }));
+      try {
+        await api.patch(`/characters/${ucId}/active`);
+        await fetchData();
+      } catch {
+        showAlert('', '변경에 실패했어요.');
+      }
+    });
   };
 
   const handleBuy = (char) => {
     if (coins < char.price) {
-      Alert.alert('코인 부족', `코인이 부족해요.\n필요: ${char.price}개, 보유: ${coins}개`);
+      showAlert('코인 부족', `코인이 부족해요.\n필요: ${char.price}개, 보유: ${coins}개`);
       return;
     }
-    Alert.alert(
-      '캐릭터 구매',
-      `${char.name}을(를) ${char.price}코인으로 구매할까요?`,
-      [
-        { text: '취소', style: 'cancel' },
-        {
-          text: '구매', onPress: async () => {
-            setBuying(char.id);
-            try {
-              const { data } = await api.post(`/shop/buy/${char.id}`);
-              setCoins(data.coins);
-              await fetchData();
-            } catch (err) {
-              Alert.alert(err.response?.data?.message ?? '구매에 실패했어요.');
-            } finally {
-              setBuying(null);
-            }
-          },
-        },
-      ]
-    );
+    showConfirm('캐릭터 구매', `${char.name}을(를) ${char.price}코인으로 구매할까요?`, '구매', async () => {
+      setConfirmModal(m => ({ ...m, visible: false }));
+      setBuying(char.id);
+      try {
+        const { data } = await api.post(`/shop/buy/${char.id}`);
+        setCoins(data.coins);
+        await fetchData();
+      } catch (err) {
+        showAlert('', err.response?.data?.message ?? '구매에 실패했어요.');
+      } finally {
+        setBuying(null);
+      }
+    });
   };
 
   if (loading) {
@@ -235,6 +230,26 @@ export default function CharacterScreen() {
         </View>
 
       </ScrollView>
+
+      {/* 확인 모달 */}
+      <ConfirmModal
+        visible={confirmModal.visible}
+        title={confirmModal.title}
+        message={confirmModal.message}
+        confirmText={confirmModal.confirmText}
+        cancelText={confirmModal.cancelText}
+        onConfirm={confirmModal.onConfirm}
+        onCancel={() => setConfirmModal(m => ({ ...m, visible: false }))}
+      />
+
+      {/* 알림 모달 */}
+      <ConfirmModal
+        visible={alertModal.visible}
+        title={alertModal.title}
+        message={alertModal.message}
+        confirmText="확인"
+        onConfirm={() => setAlertModal(m => ({ ...m, visible: false }))}
+      />
 
       {/* XP 안내 모달 */}
       <Modal visible={xpModalVisible} transparent animationType="fade" onRequestClose={() => setXpModalVisible(false)}>
