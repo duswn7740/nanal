@@ -362,7 +362,6 @@ export default function HomeScreen() {
             data={editSorted}
             keyExtractor={item => String(item.challenge_id)}
             onDragEnd={handleReorder}
-            style={styles.draggableList}
             contentContainerStyle={styles.habitSection}
             renderItem={({ item, drag, isActive }) => (
               <ScaleDecorator activeScale={1.03}>
