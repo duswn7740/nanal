@@ -1,15 +1,22 @@
 import React, { useState, useMemo } from 'react';
 import {
   View, Text, Modal, SafeAreaView,
-  TouchableOpacity, StyleSheet, Alert,
+  TouchableOpacity, StyleSheet,
 } from 'react-native';
 import { colors, typography, fontFamily, spacing } from '../theme';
 import Header from '../components/Header';
 import HabitForm, { parseHabitTime } from '../components/HabitForm';
+import ConfirmModal from '../components/ConfirmModal';
 import api from '../api';
 
 export default function EditHabitModal({ visible, habit, onClose, onUpdated, onDeleted }) {
   const [loading, setLoading] = useState(false);
+  const [confirmModal, setConfirmModal] = useState({ visible: false, title: '', message: '', confirmText: '', onConfirm: null });
+  const [alertModal, setAlertModal] = useState({ visible: false, message: '' });
+
+  const showConfirm = (title, message, confirmText, onConfirm) =>
+    setConfirmModal({ visible: true, title, message, confirmText, onConfirm });
+  const showAlert = (message) => setAlertModal({ visible: true, message });
 
   // habit이 바뀔 때마다 초기값 재계산
   const initialValues = useMemo(() => {
@@ -32,59 +39,52 @@ export default function EditHabitModal({ visible, habit, onClose, onUpdated, onD
       onUpdated(data.challenge);
       onClose();
     } catch (err) {
-      alert(err.response?.data?.message ?? '저장에 실패했어요. 다시 시도해줘요.');
+      showAlert(err.response?.data?.message ?? '저장에 실패했어요. 다시 시도해줘요.');
     } finally {
       setLoading(false);
     }
   };
 
   const handleDeleteToday = () => {
-    Alert.alert(
+    showConfirm(
       '오늘부터 삭제',
       '오늘부터 이 습관을 하지 않습니다. 과거 기록은 유지돼요.',
-      [
-        { text: '취소', style: 'cancel' },
-        {
-          text: '삭제', style: 'destructive',
-          onPress: async () => {
-            try {
-              await api.delete(`/challenges/${habit.challenge_id}?mode=today`);
-              onDeleted(habit.challenge_id);
-              onClose();
-            } catch {
-              alert('삭제에 실패했어요.');
-            }
-          },
-        },
-      ]
+      '삭제',
+      async () => {
+        setConfirmModal(m => ({ ...m, visible: false }));
+        try {
+          await api.delete(`/challenges/${habit.challenge_id}?mode=today`);
+          onDeleted(habit.challenge_id);
+          onClose();
+        } catch {
+          showAlert('삭제에 실패했어요.');
+        }
+      }
     );
   };
 
   const handleDeleteAll = () => {
-    Alert.alert(
+    showConfirm(
       '전체 삭제',
       '과거의 모든 기록이 삭제됩니다. 삭제하시겠습니까?',
-      [
-        { text: '취소', style: 'cancel' },
-        {
-          text: '전체 삭제', style: 'destructive',
-          onPress: async () => {
-            try {
-              await api.delete(`/challenges/${habit.challenge_id}?mode=all`);
-              onDeleted(habit.challenge_id);
-              onClose();
-            } catch {
-              alert('삭제에 실패했어요.');
-            }
-          },
-        },
-      ]
+      '전체 삭제',
+      async () => {
+        setConfirmModal(m => ({ ...m, visible: false }));
+        try {
+          await api.delete(`/challenges/${habit.challenge_id}?mode=all`);
+          onDeleted(habit.challenge_id);
+          onClose();
+        } catch {
+          showAlert('삭제에 실패했어요.');
+        }
+      }
     );
   };
 
   if (!habit) return null;
 
   return (
+    <>
     <Modal visible={visible} animationType="slide" onRequestClose={onClose}>
       <SafeAreaView style={styles.safeArea}>
         <Header title="습관 편집" onBack={onClose} />
@@ -107,6 +107,23 @@ export default function EditHabitModal({ visible, habit, onClose, onUpdated, onD
         />
       </SafeAreaView>
     </Modal>
+
+    <ConfirmModal
+      visible={confirmModal.visible}
+      title={confirmModal.title}
+      message={confirmModal.message}
+      confirmText={confirmModal.confirmText}
+      cancelText="취소"
+      onConfirm={confirmModal.onConfirm}
+      onCancel={() => setConfirmModal(m => ({ ...m, visible: false }))}
+    />
+    <ConfirmModal
+      visible={alertModal.visible}
+      message={alertModal.message}
+      confirmText="확인"
+      onConfirm={() => setAlertModal(m => ({ ...m, visible: false }))}
+    />
+    </>
   );
 }
 

@@ -1,8 +1,9 @@
 import React, { useState, useCallback, useEffect, useMemo, useRef } from 'react';
 import {
   View, Text, Image, ScrollView, TouchableOpacity,
-  StyleSheet, SafeAreaView, RefreshControl, AppState, Alert, BackHandler,
+  StyleSheet, SafeAreaView, RefreshControl, AppState, BackHandler,
 } from 'react-native';
+import ConfirmModal from '../components/ConfirmModal';
 import { useNavigation, useIsFocused } from '@react-navigation/native';
 import { colors, typography, fontFamily, spacing, radius } from '../theme';
 import Header from '../components/Header';
@@ -42,6 +43,8 @@ export default function HomeScreen() {
   const [xpAdDone, setXpAdDone] = useState(false);
   const xpModalRef = useRef(null);
   const adContextRef = useRef(null); // 'xp' | { type: 'box', reward, onDone }
+  const [alertModal, setAlertModal] = useState({ visible: false, message: '' });
+  const [reorderModal, setReorderModal] = useState({ visible: false, onSave: null, onDiscard: null });
 
   const { show: showRewardedAd } = useRewardedAd(useCallback(async () => {
     const ctx = adContextRef.current;
@@ -149,11 +152,44 @@ export default function HomeScreen() {
     currentOpenSwipeable.current = null;
   }, []);
 
-  // 편집모드일 때 뒤로가기 버튼 → 앱 종료 대신 편집모드 종료
+  // 편집모드일 때 뒤로가기 버튼 → 변경 있으면 저장 여부 확인, 없으면 그냥 종료
   useEffect(() => {
     if (!editMode) return;
     const sub = BackHandler.addEventListener('hardwareBackPress', () => {
-      exitEditMode();
+      const original = originalHabitsRef.current;
+      const current = allChallengesRef.current;
+      const hasChanges = original?.some(o => {
+        const c = current.find(ch => ch.id === o.challenge_id);
+        return c?.display_order !== o.display_order;
+      }) ?? false;
+
+      if (!hasChanges) {
+        exitEditMode();
+        return true;
+      }
+
+      setReorderModal({
+        visible: true,
+        onDiscard: () => {
+          setReorderModal(m => ({ ...m, visible: false }));
+          if (original) {
+            setAllChallenges(prev => prev.map(c => {
+              const o = original.find(r => r.challenge_id === c.id);
+              return o ? { ...c, display_order: o.display_order } : c;
+            }));
+            api.put('/challenges/reorder', {
+              orders: original.map(r => ({ id: r.challenge_id, display_order: r.display_order })),
+            }).catch(() => {});
+          }
+          originalHabitsRef.current = null;
+          setEditMode(false);
+        },
+        onSave: () => {
+          setReorderModal(m => ({ ...m, visible: false }));
+          originalHabitsRef.current = null;
+          setEditMode(false);
+        },
+      });
       return true;
     });
     return () => sub.remove();
@@ -183,36 +219,28 @@ export default function HomeScreen() {
       }
 
       setTimeout(() => {
-        Alert.alert(
-          '순서 편집 중',
-          '변경된 순서를 저장할까요?',
-          [
-            {
-              text: '저장 안 함',
-              onPress: () => {
-                if (original) {
-                  setAllChallenges(prev => prev.map(c => {
-                    const o = original.find(r => r.challenge_id === c.id);
-                    return o ? { ...c, display_order: o.display_order } : c;
-                  }));
-                  api.put('/challenges/reorder', {
-                    orders: original.map(r => ({ id: r.challenge_id, display_order: r.display_order })),
-                  }).catch(() => {});
-                }
-                originalHabitsRef.current = null;
-                setEditMode(false);
-              },
-            },
-            {
-              text: '저장',
-              onPress: () => {
-                originalHabitsRef.current = null;
-                setEditMode(false);
-              },
-            },
-          ],
-          { cancelable: false }
-        );
+        setReorderModal({
+          visible: true,
+          onDiscard: () => {
+            setReorderModal(m => ({ ...m, visible: false }));
+            if (original) {
+              setAllChallenges(prev => prev.map(c => {
+                const o = original.find(r => r.challenge_id === c.id);
+                return o ? { ...c, display_order: o.display_order } : c;
+              }));
+              api.put('/challenges/reorder', {
+                orders: original.map(r => ({ id: r.challenge_id, display_order: r.display_order })),
+              }).catch(() => {});
+            }
+            originalHabitsRef.current = null;
+            setEditMode(false);
+          },
+          onSave: () => {
+            setReorderModal(m => ({ ...m, visible: false }));
+            originalHabitsRef.current = null;
+            setEditMode(false);
+          },
+        });
       }, 50);
     });
     return unsubscribe;
@@ -251,7 +279,7 @@ export default function HomeScreen() {
       setHabits(prev =>
         prev.map(h => h.challenge_id === challengeId ? { ...h, is_done: isDone } : h)
       );
-      if (err.response?.status !== 409) alert('요청에 실패했어요. 다시 시도해줘요.');
+      if (err.response?.status !== 409) setAlertModal({ visible: true, message: '요청에 실패했어요. 다시 시도해줘요.' });
     }
   }, []);
 
@@ -291,7 +319,7 @@ export default function HomeScreen() {
         right={
           editMode ? (
             <TouchableOpacity onPress={exitEditMode} style={{ padding: spacing.xs }}>
-              <Text style={styles.editModeBtn}>완료</Text>
+              <Text style={styles.editModeDoneBtn}>완료</Text>
             </TouchableOpacity>
           ) : (
             <TouchableOpacity onPress={() => setHeaderMenuVisible(v => !v)} style={{ padding: spacing.xs }}>
@@ -449,10 +477,25 @@ export default function HomeScreen() {
         onWatchAd={() => {
           adContextRef.current = 'xp';
           const shown = showRewardedAd();
-          if (!shown) { adContextRef.current = null; alert('광고를 불러오는 중이에요. 잠시 후 다시 시도해줘요.'); }
+          if (!shown) { adContextRef.current = null; setAlertModal({ visible: true, message: '광고를 불러오는 중이에요. 잠시 후 다시 시도해줘요.' }); }
         }}
       />
 
+      <ConfirmModal
+        visible={reorderModal.visible}
+        title="순서 편집 중"
+        message="변경된 순서를 저장할까요?"
+        confirmText="저장"
+        cancelText="저장 안 함"
+        onConfirm={reorderModal.onSave}
+        onCancel={reorderModal.onDiscard}
+      />
+      <ConfirmModal
+        visible={alertModal.visible}
+        message={alertModal.message}
+        confirmText="확인"
+        onConfirm={() => setAlertModal({ visible: false, message: '' })}
+      />
     </SafeAreaView>
   );
 }
@@ -483,6 +526,7 @@ const styles = StyleSheet.create({
   scrollContent: { paddingBottom: 100 },
 
   editModeBtn: { fontSize: typography.xl, color: colors.textMain, letterSpacing: 1 },
+  editModeDoneBtn: { fontSize: typography.md, color: colors.textMain},
 
   characterSection: {
     alignSelf: 'stretch',

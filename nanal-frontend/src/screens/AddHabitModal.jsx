@@ -3,6 +3,7 @@ import { Modal, SafeAreaView, StyleSheet } from 'react-native';
 import { colors } from '../theme';
 import Header from '../components/Header';
 import HabitForm from '../components/HabitForm';
+import ConfirmModal from '../components/ConfirmModal';
 import api from '../api';
 
 const DEFAULT_VALUES = {
@@ -12,6 +13,7 @@ const DEFAULT_VALUES = {
 
 export default function AddHabitModal({ visible, onClose, onAdded }) {
   const [loading, setLoading] = useState(false);
+  const [alertModal, setAlertModal] = useState({ visible: false, message: '' });
 
   const handleSubmit = async (values) => {
     setLoading(true);
@@ -20,26 +22,33 @@ export default function AddHabitModal({ visible, onClose, onAdded }) {
       onAdded(data.challenge);
       onClose();
     } catch (err) {
-      // HabitForm의 error state가 없으므로 alert로 fallback
-      alert(err.response?.data?.message ?? '저장에 실패했어요. 다시 시도해줘요.');
+      setAlertModal({ visible: true, message: err.response?.data?.message ?? '저장에 실패했어요. 다시 시도해줘요.' });
     } finally {
       setLoading(false);
     }
   };
 
   return (
-    <Modal visible={visible} animationType="slide" onRequestClose={onClose}>
-      <SafeAreaView style={styles.safeArea}>
-        <Header title="습관 추가" onBack={onClose} />
-        <HabitForm
-          key={String(visible)}
-          initialValues={DEFAULT_VALUES}
-          onSubmit={handleSubmit}
-          submitLabel="추가하기"
-          loading={loading}
-        />
-      </SafeAreaView>
-    </Modal>
+    <>
+      <Modal visible={visible} animationType="slide" onRequestClose={onClose}>
+        <SafeAreaView style={styles.safeArea}>
+          <Header title="습관 추가" onBack={onClose} />
+          <HabitForm
+            key={String(visible)}
+            initialValues={DEFAULT_VALUES}
+            onSubmit={handleSubmit}
+            submitLabel="추가하기"
+            loading={loading}
+          />
+        </SafeAreaView>
+      </Modal>
+      <ConfirmModal
+        visible={alertModal.visible}
+        message={alertModal.message}
+        confirmText="확인"
+        onConfirm={() => setAlertModal({ visible: false, message: '' })}
+      />
+    </>
   );
 }
 

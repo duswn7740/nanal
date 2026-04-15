@@ -1,8 +1,9 @@
 import React, { useState } from 'react';
 import {
   View, Text, TouchableOpacity, SafeAreaView,
-  StyleSheet, Alert, Modal, KeyboardAvoidingView, Platform, ScrollView,
+  StyleSheet, Modal, KeyboardAvoidingView, Platform, ScrollView,
 } from 'react-native';
+import ConfirmModal from '../components/ConfirmModal';
 import { colors, typography, fontFamily, spacing, radius } from '../theme';
 import Header from '../components/Header';
 import Input from '../components/Input';
@@ -32,12 +33,18 @@ export default function SettingsScreen() {
   const [newPw, setNewPw] = useState('');
   const [pwError, setPwError] = useState('');
   const [pwLoading, setPwLoading] = useState(false);
+  const [confirmModal, setConfirmModal] = useState({ visible: false, title: '', message: '', confirmText: '', onConfirm: null });
+  const [alertModal, setAlertModal] = useState({ visible: false, title: '', message: '' });
+
+  const showConfirm = (title, message, confirmText, onConfirm) =>
+    setConfirmModal({ visible: true, title, message, confirmText, onConfirm });
+  const showAlert = (title, message) => setAlertModal({ visible: true, title, message });
 
   const handleLogout = () => {
-    Alert.alert('로그아웃', '정말 로그아웃할까요?', [
-      { text: '취소', style: 'cancel' },
-      { text: '로그아웃', style: 'destructive', onPress: logout },
-    ]);
+    showConfirm('로그아웃', '정말 로그아웃할까요?', '로그아웃', () => {
+      setConfirmModal(m => ({ ...m, visible: false }));
+      logout();
+    });
   };
 
   const openNicknameModal = () => {
@@ -58,7 +65,7 @@ export default function SettingsScreen() {
     try {
       await api.patch('/auth/password', { currentPassword: currentPw, newPassword: newPw });
       setPwModal(false);
-      Alert.alert('완료', '비밀번호가 변경되었어요.');
+      showAlert('완료', '비밀번호가 변경되었어요.');
     } catch (err) {
       setPwError(err.response?.data?.message ?? '변경에 실패했어요.');
     } finally {
@@ -114,19 +121,15 @@ export default function SettingsScreen() {
         <TouchableOpacity
           style={styles.withdrawBtn}
           onPress={() => {
-            Alert.alert('회원탈퇴', '정말 탈퇴할까요?\n모든 기록이 삭제됩니다.', [
-              { text: '취소', style: 'cancel' },
-              {
-                text: '탈퇴', style: 'destructive', onPress: async () => {
-                  try {
-                    await api.delete('/auth/withdraw');
-                    logout();
-                  } catch {
-                    Alert.alert('오류', '탈퇴에 실패했어요. 다시 시도해줘요.');
-                  }
-                }
-              },
-            ]);
+            showConfirm('회원탈퇴', '정말 탈퇴할까요?\n모든 기록이 삭제됩니다.', '탈퇴', async () => {
+              setConfirmModal(m => ({ ...m, visible: false }));
+              try {
+                await api.delete('/auth/withdraw');
+                logout();
+              } catch {
+                showAlert('오류', '탈퇴에 실패했어요. 다시 시도해줘요.');
+              }
+            });
           }}
         >
           <Text style={styles.withdrawText}>회원탈퇴</Text>
@@ -137,6 +140,22 @@ export default function SettingsScreen() {
         visible={policyType !== null}
         type={policyType}
         onClose={() => setPolicyType(null)}
+      />
+      <ConfirmModal
+        visible={confirmModal.visible}
+        title={confirmModal.title}
+        message={confirmModal.message}
+        confirmText={confirmModal.confirmText}
+        cancelText="취소"
+        onConfirm={confirmModal.onConfirm}
+        onCancel={() => setConfirmModal(m => ({ ...m, visible: false }))}
+      />
+      <ConfirmModal
+        visible={alertModal.visible}
+        title={alertModal.title}
+        message={alertModal.message}
+        confirmText="확인"
+        onConfirm={() => setAlertModal(m => ({ ...m, visible: false }))}
       />
 
       {/* 비밀번호 변경 모달 */}
