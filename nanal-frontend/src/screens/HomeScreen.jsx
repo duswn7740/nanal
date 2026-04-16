@@ -272,6 +272,8 @@ export default function HomeScreen() {
           const modal = { xp: data.xpGain, allDone: data.xpGain >= 15 };
           xpModalRef.current = modal;
           setXpModal(modal);
+          // 레벨업 반영을 위해 캐릭터 데이터 갱신
+          api.get('/characters/active').then(res => setCharacter(res.data.character)).catch(() => {});
         }
       }
     } catch (err) {

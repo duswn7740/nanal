@@ -49,7 +49,7 @@ export default function TabNavigator() {
           tabBarActiveTintColor: colors.lavenderDark,
           tabBarInactiveTintColor: colors.textSub,
           tabBarLabel: () => null,
-          tabBarItemStyle: { justifyContent: 'center', alignItems: 'center' },
+          tabBarItemStyle: { justifyContent: 'center', alignItems: 'center', paddingBottom: 0, paddingTop: 0 },
           tabBarIcon: ({ focused }) => (
             <Image
               source={focused ? tab.active : tab.inactive}
