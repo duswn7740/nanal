@@ -1,5 +1,5 @@
 import React from 'react';
-import { createBottomTabNavigator } from '@react-navigation/bottom-tabs';
+import { createBottomTabNavigator, BottomTabBar } from '@react-navigation/bottom-tabs';
 import { Image, View, StyleSheet } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { colors, typography, fontFamily } from '../theme';
@@ -41,33 +41,38 @@ export default function TabNavigator() {
   return (
     <View style={styles.container}>
       <Tab.Navigator
-      screenOptions={({ route }) => {
-        const tab = TABS.find(t => t.name === route.name);
-        return {
-          headerShown: false,
-          tabBarStyle: [styles.tabBar, { paddingBottom: insets.bottom, height: 56 + insets.bottom }],
-          tabBarActiveTintColor: colors.lavenderDark,
-          tabBarInactiveTintColor: colors.textSub,
-          tabBarLabel: () => null,
-          tabBarItemStyle: { justifyContent: 'center', alignItems: 'center', paddingBottom: 0, paddingTop: 0 },
-          tabBarIcon: ({ focused }) => (
-            <Image
-              source={focused ? tab.active : tab.inactive}
-              style={styles.icon}
-              resizeMode="contain"
+        tabBar={(props) => (
+          <View>
+            <BannerAd
+              unitId={BANNER_AD_ID}
+              size={BannerAdSize.ANCHORED_ADAPTIVE_BANNER}
             />
-          ),
-        };
-      }}
-    >
-      {TABS.map(tab => (
-        <Tab.Screen key={tab.name} name={tab.name} component={tab.component} />
-      ))}
-    </Tab.Navigator>
-      <BannerAd
-        unitId={BANNER_AD_ID}
-        size={BannerAdSize.ANCHORED_ADAPTIVE_BANNER}
-      />
+            <BottomTabBar {...props} />
+          </View>
+        )}
+        screenOptions={({ route }) => {
+          const tab = TABS.find(t => t.name === route.name);
+          return {
+            headerShown: false,
+            tabBarStyle: [styles.tabBar, { paddingBottom: insets.bottom, height: 56 + insets.bottom }],
+            tabBarActiveTintColor: colors.lavenderDark,
+            tabBarInactiveTintColor: colors.textSub,
+            tabBarLabel: () => null,
+            tabBarItemStyle: { justifyContent: 'center', alignItems: 'center', paddingBottom: 0, paddingTop: 0 },
+            tabBarIcon: ({ focused }) => (
+              <Image
+                source={focused ? tab.active : tab.inactive}
+                style={styles.icon}
+                resizeMode="contain"
+              />
+            ),
+          };
+        }}
+      >
+        {TABS.map(tab => (
+          <Tab.Screen key={tab.name} name={tab.name} component={tab.component} />
+        ))}
+      </Tab.Navigator>
     </View>
   );
 }
