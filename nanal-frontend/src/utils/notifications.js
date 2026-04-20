@@ -80,7 +80,7 @@ export async function scheduleHabitNotifications(habit) {
       for (const dow of dowList) {
         tasks.push(Notifications.scheduleNotificationAsync({
           identifier: `habit-${id}-${lead}-${dow}`,
-          content: { title: '나날이 🌱', body, sound: true },
+          content: { title: '나날 🌱', body, sound: true },
           trigger: {
             type: Notifications.SchedulableTriggerInputTypes.WEEKLY,
             weekday: dow + 1, // expo: 1=일, 2=월 ...
@@ -94,7 +94,7 @@ export async function scheduleHabitNotifications(habit) {
       // 매일 반복
       tasks.push(Notifications.scheduleNotificationAsync({
         identifier: `habit-${id}-${lead}`,
-        content: { title: '나날이 🌱', body, sound: true },
+        content: { title: '나날 🌱', body, sound: true },
         trigger: {
           type: Notifications.SchedulableTriggerInputTypes.DAILY,
           hour: notifHour,

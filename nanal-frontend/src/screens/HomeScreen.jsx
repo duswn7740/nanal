@@ -290,7 +290,7 @@ export default function HomeScreen() {
     const todayIds = new Set(habits.map(h => h.challenge_id));
     return allChallenges
       .filter(c => !todayIds.has(c.id))
-      .map(c => ({ challenge_id: c.id, title: c.title, habit_time: c.habit_time, display_order: c.display_order, is_done: false, isNonToday: true }));
+      .map(c => ({ challenge_id: c.id, title: c.title, habit_time: c.habit_time, display_order: c.display_order, is_done: false, isNonToday: true, repeat_type: c.repeat_type, repeat_days: c.repeat_days }));
   }, [habits, allChallenges]);
 
   // 일반/모두보기 모드: 미완료 → 완료 → (오늘 아닌 습관)
@@ -301,9 +301,12 @@ export default function HomeScreen() {
       if (a.habit_time && !b.habit_time) return 1;
       if (a.habit_time && b.habit_time) return a.habit_time.localeCompare(b.habit_time);
       return (a.display_order ?? 0) - (b.display_order ?? 0);
+    }).map(h => {
+      const c = allChallenges.find(c => c.id === h.challenge_id);
+      return { ...h, repeat_type: c?.repeat_type, repeat_days: c?.repeat_days };
     });
     return showAll ? [...todayHabits, ...nonTodayHabits] : todayHabits;
-  }, [habits, nonTodayHabits, showAll]);
+  }, [habits, nonTodayHabits, showAll, allChallenges]);
 
   // 편집모드: 전체 습관을 display_order로 정렬
   const editSorted = useMemo(() =>

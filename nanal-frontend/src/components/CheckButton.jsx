@@ -17,7 +17,6 @@ const IMAGE_PADDING = 8; // 버튼 테두리와 캐릭터 이미지 사이 여�
  */
 export default function CheckButton({
   done = false,
-  characterImage,   // 캐릭터 이미지 소스 (준비 전엔 undefined)
   onPress,
   size = 52,
 }) {
@@ -31,9 +30,9 @@ export default function CheckButton({
       onPress={onPress}
       activeOpacity={0.7}
     >
-      {done && characterImage && (
+      {done && (
         <Image
-          source={characterImage}
+          source={require('../../assets/icons/check.png')}
           style={{ width: size - IMAGE_PADDING, height: size - IMAGE_PADDING }}
           resizeMode="contain"
         />
