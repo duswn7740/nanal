@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useState, useEffect } from 'react';
 import { View, ActivityIndicator, StyleSheet, Text, TextInput } from 'react-native';
 
 // 시스템 글꼴 크기 설정 무시 (모든 기기에서 동일한 폰트 크기 유지)
@@ -11,23 +11,41 @@ import { StatusBar } from 'expo-status-bar';
 import { GestureHandlerRootView } from 'react-native-gesture-handler';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
 import { useFonts } from 'expo-font';
-import { useEffect } from 'react';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 import { requestNotificationPermission, promptExactAlarmIfNeeded } from './src/utils/notifications';
 import { AuthProvider, useAuth } from './src/context/AuthContext';
 import TabNavigator from './src/navigation/TabNavigator';
 import AuthNavigator from './src/navigation/AuthNavigator';
+import OnboardingScreen from './src/screens/OnboardingScreen';
 import { colors } from './src/theme';
+
+const ONBOARDING_KEY = 'onboarding_done';
 
 // 로그인 상태에 따라 보여줄 네비게이터 결정
 function RootNavigator() {
   const { user, isLoading } = useAuth();
+  const [onboardingDone, setOnboardingDone] = useState(null);
 
-  // 앱 시작 시 토큰 복원 중이면 로딩 표시
-  if (isLoading) {
+  useEffect(() => {
+    AsyncStorage.getItem(ONBOARDING_KEY).then(val => {
+      setOnboardingDone(val === 'true');
+    });
+  }, []);
+
+  if (isLoading || onboardingDone === null) {
     return (
       <View style={styles.loading}>
         <ActivityIndicator size="large" color={colors.lavender} />
       </View>
+    );
+  }
+
+  if (!onboardingDone) {
+    return (
+      <OnboardingScreen onDone={async () => {
+        await AsyncStorage.setItem(ONBOARDING_KEY, 'true');
+        setOnboardingDone(true);
+      }} />
     );
   }
 
