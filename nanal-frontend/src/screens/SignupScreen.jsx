@@ -15,6 +15,7 @@ import Button from '../components/Button';
 import Header from '../components/Header';
 import api from '../api';
 import { useAuth } from '../context/AuthContext';
+import ConfirmModal from '../components/ConfirmModal';
 
 export default function SignupScreen({ navigation }) {
   const { login } = useAuth();
@@ -26,6 +27,7 @@ export default function SignupScreen({ navigation }) {
   const [errors, setErrors] = useState({});   // 필드별 에러 메시지
   const [serverError, setServerError] = useState('');
   const [loading, setLoading] = useState(false);
+  const [modalVisible, setModalVisible] = useState(false);
 
   const validate = () => {
     const newErrors = {};
@@ -78,7 +80,25 @@ export default function SignupScreen({ navigation }) {
 
   return (
     <SafeAreaView style={styles.safeArea}>
-      <Header title="회원가입" onBack={() => navigation.goBack()} />
+      <Header title="회원가입" 
+        onBack={() => {
+          if (nickname || email || password) {
+            setModalVisible(true);
+          } else {
+            navigation.goBack()
+          }
+        }} 
+      />
+
+        <ConfirmModal
+          visible={modalVisible}
+          title = "회원가입 중"
+          message="뒤로가면 입력한 내용이 사라져요!"
+          confirmText="나가기"
+          cancelText="취소"
+          onConfirm={() => navigation.goBack()}
+          onCancel={() => setModalVisible(false)}
+        />
 
       <KeyboardAvoidingView
         style={styles.flex}
@@ -145,7 +165,12 @@ export default function SignupScreen({ navigation }) {
       </KeyboardAvoidingView>
     </SafeAreaView>
   );
+
+
+
 }
+
+
 
 const styles = StyleSheet.create({
   safeArea: {
