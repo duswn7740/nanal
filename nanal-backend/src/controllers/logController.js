@@ -3,16 +3,18 @@ const { getTodayKST, getYesterdayKST, normalizeDateStr } = require('../utils/dat
 const { grantExp } = require('../utils/character');
 
 // 캐릭터 해금 조건 체크 후 미보유 캐릭터 자동 지급
-async function checkUnlocks(userId) {
+async function checkUnlocks(userId, conn) {
+  const db = conn || pool;
+
   // 최대 연속 스트릭
-  const [[streakRow]] = await pool.query(
+  const [[streakRow]] = await db.query(
     'SELECT MAX(best_streak) AS best FROM challenges WHERE user_id = ?',
     [userId]
   );
   const bestStreak = streakRow.best ?? 0;
 
   // 총 완료 일수 (중복 날짜 없이)
-  const [[doneRow]] = await pool.query(
+  const [[doneRow]] = await db.query(
     `SELECT COUNT(DISTINCT l.log_date) AS total
      FROM logs l
      JOIN challenges c ON c.id = l.challenge_id
@@ -22,7 +24,7 @@ async function checkUnlocks(userId) {
   const totalDays = doneRow.total ?? 0;
 
   // 이미 보유한 character_id 목록
-  const [owned] = await pool.query(
+  const [owned] = await db.query(
     'SELECT character_id FROM user_characters WHERE user_id = ?',
     [userId]
   );
@@ -38,7 +40,7 @@ async function checkUnlocks(userId) {
   await Promise.all(
     unlocks
       .filter(({ id, condition }) => condition && !ownedIds.has(id))
-      .map(({ id }) => pool.query(
+      .map(({ id }) => db.query(
         'INSERT INTO user_characters (user_id, character_id, level, exp, is_active) VALUES (?, ?, 1, 0, 0)',
         [userId, id]
       ))
@@ -57,12 +59,12 @@ async function checkin(req, res) {
     return res.status(400).json({ message: 'challenge_id는 필수입니다.' });
   }
 
-  const today = getTodayKST(); // KST 기준 오늘 날짜 (ex: '2026-03-27')
-  const todayDow = new Date(Date.now() + 9 * 60 * 60 * 1000).getUTCDay(); // KST 기준 요일 (0=일)
+  const today = getTodayKST();
+  const todayDow = new Date(Date.now() + 9 * 60 * 60 * 1000).getUTCDay();
 
+  // Step 1, 2: 트랜잭션 전 검증 (읽기 전용)
+  let challenge, existing;
   try {
-    // Step 1: 챌린지가 본인 소유이고 활성 상태인지 확인
-    // current_streak, best_streak도 함께 가져와 스트릭 계산에 사용
     const [challenges] = await pool.query(
       `SELECT id, current_streak, best_streak
        FROM challenges
@@ -72,48 +74,52 @@ async function checkin(req, res) {
     if (challenges.length === 0) {
       return res.status(404).json({ message: '챌린지를 찾을 수 없습니다.' });
     }
-    const challenge = challenges[0];
+    challenge = challenges[0];
 
-    // Step 2: 오늘 이미 체크인했는지 확인
-    const [existing] = await pool.query(
+    const [existingRows] = await pool.query(
       'SELECT id, is_done, xp_granted FROM logs WHERE challenge_id = ? AND log_date = ?',
       [challenge_id, today]
     );
-    if (existing.length > 0 && existing[0].is_done) {
+    if (existingRows.length > 0 && existingRows[0].is_done) {
       return res.status(409).json({ message: '오늘 이미 완료했습니다.' });
     }
+    existing = existingRows;
+  } catch (err) {
+    console.error('checkin error:', err);
+    return res.status(500).json({ message: '서버 오류가 발생했습니다.' });
+  }
 
-    const doneAt = new Date(); // 완료 시각은 UTC 그대로 저장 (DB 전략: 저장은 UTC)
-    const alreadyGranted = existing.length > 0 && existing[0].xp_granted; // 취소 후 재체크인 시 XP 중복 방지
+  const doneAt = new Date();
+  const alreadyGranted = existing.length > 0 && existing[0].xp_granted;
+
+  // Step 3~7: 트랜잭션으로 묶기
+  const conn = await pool.getConnection();
+  try {
+    await conn.beginTransaction();
 
     // Step 3: 로그 저장
-    // 자정 cron이 먼저 실행됐다면 is_done=false 레코드가 이미 있을 수 있음 → UPDATE
-    // 아직 cron이 안 돌았다면 레코드가 없음 → INSERT
     if (existing.length > 0) {
-      await pool.query(
+      await conn.query(
         'UPDATE logs SET is_done = TRUE, done_at = ?, memo = ? WHERE id = ?',
         [doneAt, memo || null, existing[0].id]
       );
     } else {
-      await pool.query(
+      await conn.query(
         'INSERT INTO logs (challenge_id, log_date, is_done, done_at, memo) VALUES (?, ?, TRUE, ?, ?)',
         [challenge_id, today, doneAt, memo || null]
       );
     }
 
-    // Step 4: 스트릭(연속 달성일) 계산
-    // 어제 로그가 is_done=true면 연속 달성 → streak +1
-    // 어제 못 했거나 로그가 없으면 새로 시작 → streak = 1
+    // Step 4: 스트릭 계산
     const yesterday = getYesterdayKST();
-    const [yesterdayLog] = await pool.query(
+    const [yesterdayLog] = await conn.query(
       'SELECT is_done FROM logs WHERE challenge_id = ? AND log_date = ?',
       [challenge_id, yesterday]
     );
     const continuedStreak = yesterdayLog.length > 0 && yesterdayLog[0].is_done;
     const newStreak = continuedStreak ? challenge.current_streak + 1 : 1;
 
-    // best_streak는 DB에서 GREATEST로 처리해 현재값보다 작아지는 걸 방지
-    await pool.query(
+    await conn.query(
       `UPDATE challenges
        SET current_streak = ?,
            best_streak    = GREATEST(best_streak, ?)
@@ -121,31 +127,25 @@ async function checkin(req, res) {
       [newStreak, newStreak, challenge_id]
     );
 
-    // Step 5: 달성하면 새싹이 상태를 건강(0)으로 회복
-    await pool.query(
-      'UPDATE users SET sprout_state = 0 WHERE id = ?',
-      [userId]
-    );
+    // Step 5: 새싹이 상태 회복
+    await conn.query('UPDATE users SET sprout_state = 0 WHERE id = ?', [userId]);
 
-    // Step 6: XP 지급 (하루 첫 체크인 +10, 전체완료 보너스 +5)
-    // 취소 후 재체크인이면 XP 지급 건너뜀
+    // Step 6: XP 지급
     let xpGain = 0;
     if (!alreadyGranted) {
-      const [[userRow]] = await pool.query(
+      const [[userRow]] = await conn.query(
         'SELECT last_checkin_date, last_all_done_date FROM users WHERE id = ?',
         [userId]
       );
       const lastCheckinDate = userRow.last_checkin_date ? normalizeDateStr(userRow.last_checkin_date) : null;
       const lastAllDoneDate = userRow.last_all_done_date ? normalizeDateStr(userRow.last_all_done_date) : null;
 
-      // 오늘 첫 체크인이면 +10
       if (lastCheckinDate !== today) {
         xpGain += 10;
-        await pool.query('UPDATE users SET last_checkin_date = ? WHERE id = ?', [today, userId]);
+        await conn.query('UPDATE users SET last_checkin_date = ? WHERE id = ?', [today, userId]);
       }
 
-      // 오늘 스케줄된 습관 전체 완료 여부 확인 (오늘 요일에 해당하는 습관만)
-      const [[allDoneRow]] = await pool.query(
+      const [[allDoneRow]] = await conn.query(
         `SELECT
            COUNT(*) AS total,
            COUNT(CASE WHEN l.is_done = TRUE THEN 1 END) AS done
@@ -159,20 +159,22 @@ async function checkin(req, res) {
 
       if (allDone && lastAllDoneDate !== today) {
         xpGain += 5;
-        await pool.query('UPDATE users SET last_all_done_date = ? WHERE id = ?', [today, userId]);
+        await conn.query('UPDATE users SET last_all_done_date = ? WHERE id = ?', [today, userId]);
       }
 
       if (xpGain > 0) {
-        await grantExp(userId, xpGain);
-        await checkUnlocks(userId);
+        await grantExp(userId, xpGain, conn);
+        await checkUnlocks(userId, conn);
       }
 
-      // XP 지급 완료 표시
-      await pool.query(
+      // Step 7: XP 지급 완료 표시
+      await conn.query(
         'UPDATE logs SET xp_granted = TRUE WHERE challenge_id = ? AND log_date = ?',
         [challenge_id, today]
       );
     }
+
+    await conn.commit();
 
     return res.json({
       message: '체크인 성공!',
@@ -181,8 +183,11 @@ async function checkin(req, res) {
       xpGain: alreadyGranted ? 0 : xpGain,
     });
   } catch (err) {
+    await conn.rollback();
     console.error('checkin error:', err);
     return res.status(500).json({ message: '서버 오류가 발생했습니다.' });
+  } finally {
+    conn.release();
   }
 }
 
