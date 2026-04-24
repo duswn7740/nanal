@@ -33,10 +33,14 @@ export function useRewardedAd(onRewarded) {
     return unsub;
   }, []);
 
-  const show = useCallback(() => {
+  const show = useCallback(async(retries = 3) => {
     if (loadedRef.current && adRef.current) {
       adRef.current.show();
       return true;
+    }
+    if ( retries > 0) {
+      await new Promise(resolve => setTimeout(resolve, 1000));
+      return show(retries -1);
     }
     return false; // 아직 로드 안 됨
   }, []);
