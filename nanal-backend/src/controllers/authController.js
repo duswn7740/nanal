@@ -212,6 +212,19 @@ async function updatePassword(req, res) {
   }
 }
 
+// PUT /api/auth/push-token
+async function updatePushToken(req, res) {
+  const { token } = req.body;
+  if (!token) return res.status(400).json({ message: 'token이 필요합니다.' });
+  try {
+    await pool.query('UPDATE users SET expo_push_token = ? WHERE id = ?', [token, req.user.userId]);
+    return res.json({ message: '푸시 토큰이 저장되었습니다.' });
+  } catch (err) {
+    console.error('updatePushToken error:', err);
+    return res.status(500).json({ message: '서버 오류가 발생했습니다.' });
+  }
+}
+
 // DELETE /api/auth/withdraw
 async function withdraw(req, res) {
   const userId = req.user.userId;
@@ -224,4 +237,4 @@ async function withdraw(req, res) {
   }
 }
 
-module.exports = { signup, login, me, updateNickname, withdraw, forgotPassword, updatePassword };
+module.exports = { signup, login, me, updateNickname, withdraw, forgotPassword, updatePassword, updatePushToken };

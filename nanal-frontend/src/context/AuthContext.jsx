@@ -1,6 +1,7 @@
 import React, { createContext, useContext, useState, useEffect, useMemo, useCallback } from 'react';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import api, { setUnauthorizedHandler } from '../api';
+import { registerPushToken } from '../utils/notifications';
 
 const AuthContext = createContext(null);
 
@@ -16,6 +17,7 @@ export function AuthProvider({ children }) {
         if (token) {
           const { data } = await api.get('/auth/me');
           setUser(data.user);
+          registerPushToken();
         }
       } catch {
         // 토큰 만료 또는 서버 오류 시 토큰 삭제
@@ -30,6 +32,7 @@ export function AuthProvider({ children }) {
   const login = async (token, userData) => {
     await AsyncStorage.setItem('token', token);
     setUser(userData);
+    registerPushToken();
   };
 
   const updateUser = (partial) => setUser(prev => ({ ...prev, ...partial }));

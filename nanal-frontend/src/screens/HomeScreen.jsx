@@ -5,6 +5,7 @@ import {
 } from 'react-native';
 import ConfirmModal from '../components/ConfirmModal';
 import { useNavigation, useIsFocused } from '@react-navigation/native';
+import { useAuth } from '../context/AuthContext';
 import { colors, typography, fontFamily, spacing, radius } from '../theme';
 import Header from '../components/Header';
 import Avatar from '../components/Avatar';
@@ -24,6 +25,7 @@ import { useRewardedAd } from '../hooks/useRewardedAd';
 export default function HomeScreen() {
   const navigation = useNavigation();
   const isFocused = useIsFocused();
+  const { user } = useAuth();
   const [habits, setHabits] = useState([]);
   const [allChallenges, setAllChallenges] = useState([]);
   const [showAll, setShowAll] = useState(false);
@@ -78,7 +80,7 @@ export default function HomeScreen() {
         habit_time: c.habit_time ? String(c.habit_time).slice(0, 5) : null,
       })));
       setCharacter(charRes.data.character);
-      rescheduleAllHabits(challengeRes.data.challenges);
+      rescheduleAllHabits(challengeRes.data.challenges, user?.nickname);
 
       // 오늘 아직 상자를 안 열었으면 모달 자동 오픈
       if (!boxRes.data.opened) {
@@ -440,7 +442,7 @@ export default function HomeScreen() {
         onClose={() => setModalVisible(false)}
         onAdded={(newHabit) => {
           setHabits(prev => [...prev, { ...newHabit, is_done: false }]);
-          scheduleHabitNotifications(newHabit);
+          scheduleHabitNotifications(newHabit, user?.nickname);
           setModalVisible(false);
         }}
       />
@@ -464,7 +466,7 @@ export default function HomeScreen() {
           setHabits(prev => prev.map(h =>
             h.challenge_id === updated.id ? { ...h, ...updated, challenge_id: updated.id } : h
           ));
-          rescheduleAllHabits([updated]);
+          rescheduleAllHabits([updated], user?.nickname);
         }}
         onDeleted={(challengeId) => {
           setHabits(prev => prev.filter(h => h.challenge_id !== challengeId));

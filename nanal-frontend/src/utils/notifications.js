@@ -1,6 +1,8 @@
 import * as Notifications from 'expo-notifications';
+import * as Device from 'expo-device';
 import { Platform, Linking, Alert } from 'react-native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
+import api from '../api';
 
 const EXACT_ALARM_PROMPTED_KEY = 'exact_alarm_prompted';
 
@@ -54,8 +56,23 @@ export async function promptExactAlarmIfNeeded() {
   );
 }
 
+// Expo 푸시 토큰을 서버에 등록
+export async function registerPushToken() {
+  if (!Device.isDevice) return; // 에뮬레이터에서는 푸시 토큰 불가
+  try {
+    const { status } = await Notifications.getPermissionsAsync();
+    if (status !== 'granted') return;
+    const { data: token } = await Notifications.getExpoPushTokenAsync({
+      projectId: '695a39dd-a1b7-42ea-8b35-694d8c9c9d4b',
+    });
+    await api.put('/auth/push-token', { token });
+  } catch (err) {
+    console.warn('registerPushToken 실패:', err);
+  }
+}
+
 // habit_time: "07:30", alarm_lead_min: "0,5,30", repeat_type: "daily"/"weekly", repeat_days: "1,3,5"
-export async function scheduleHabitNotifications(habit) {
+export async function scheduleHabitNotifications(habit, nickname) {
   await cancelHabitNotifications(habit.id);
 
   const { id, title, habit_time, alarm_lead_min, repeat_type, repeat_days } = habit;
@@ -73,7 +90,8 @@ export async function scheduleHabitNotifications(habit) {
     const totalMin = h * 60 + m - lead;
     const notifHour = Math.floor(((totalMin % 1440) + 1440) % 1440 / 60);
     const notifMin = ((totalMin % 1440) + 1440) % 1440 % 60;
-    const body = lead === 0 ? `${title} 할 시간이에요!` : `${lead}분 후 ${title} 할 시간이에요!`;
+    const prefix = nickname ? `${nickname}님 ` : '';
+    const body = lead === 0 ? `${prefix}${title} 할 시간이에요!` : `${prefix}${lead}분 후 ${title} 할 시간이에요!`;
 
     if (dowList) {
       // 주간 반복: 요일별로 각각 스케줄
@@ -113,7 +131,7 @@ export async function cancelHabitNotifications(habitId) {
   await Promise.all(toCancel.map(n => Notifications.cancelScheduledNotificationAsync(n.identifier)));
 }
 
-export async function rescheduleAllHabits(habits) {
+export async function rescheduleAllHabits(habits, nickname) {
   await Notifications.cancelAllScheduledNotificationsAsync();
-  await Promise.all(habits.map(scheduleHabitNotifications));
+  await Promise.all(habits.map(h => scheduleHabitNotifications(h, nickname)));
 }

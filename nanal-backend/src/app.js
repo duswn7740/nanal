@@ -9,6 +9,7 @@ const charactersRouter = require('./routes/characters');
 const boxRouter = require('./routes/box');
 const shopRouter = require('./routes/shop');
 const { scheduleMidnightCron } = require('./cron/midnight');
+const { scheduleReminderCron } = require('./cron/reminder');
 
 const app = express();
 
@@ -23,8 +24,9 @@ app.use('/api/characters', charactersRouter);
 app.use('/api/box', boxRouter);
 app.use('/api/shop', shopRouter);
 
-// 자정 크론 등록
+// 크론 등록
 scheduleMidnightCron();
+scheduleReminderCron();
 
 // 헬스체크
 app.get('/health', (req, res) => res.json({ status: 'ok' }));
