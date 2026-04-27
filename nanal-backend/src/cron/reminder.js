@@ -65,7 +65,9 @@ async function sendReminders(label) {
       .map(u => ({
         to: u.expo_push_token,
         title: '나날 🌱',
-        body: `${u.nickname}님 습관 할 시간이예요!!`,
+        body: label === '19시'
+          ? `${u.nickname}님 오늘 습관 잊지 않으셨죠? 🌱`
+          : `${u.nickname}님 자기 전에 습관 체크해요! 🌙`,
         sound: 'default',
       }));
 
