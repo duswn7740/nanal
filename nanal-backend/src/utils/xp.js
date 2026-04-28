@@ -1,5 +1,5 @@
 // 레벨별 누적 XP 기준 (레벨 1=0, 2=100, 3=220 ...)
-const LEVEL_THRESHOLDS = [0, 100, 220, 360, 520, 700, 900];
+const LEVEL_THRESHOLDS = [0, 100, 250, 430, 640, 880, 1200];
 const MAX_LEVEL = 7;
 
 function getLevelFromExp(exp) {
