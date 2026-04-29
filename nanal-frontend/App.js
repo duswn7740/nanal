@@ -40,14 +40,14 @@ function RootNavigator() {
     );
   }
 
-  if (!onboardingDone) {
-    return (
-      <OnboardingScreen onDone={async () => {
-        await AsyncStorage.setItem(ONBOARDING_KEY, 'true');
-        setOnboardingDone(true);
-      }} />
-    );
-  }
+  // if (!onboardingDone) {
+  //   return (
+  //     <OnboardingScreen onDone={async () => {
+  //       await AsyncStorage.setItem(ONBOARDING_KEY, 'true');
+  //       setOnboardingDone(true);
+  //     }} />
+  //   );
+  // }
 
   // 로그인 됐으면 홈(탭 네비게이터), 아니면 로그인/회원가입
   return user ? <TabNavigator /> : <AuthNavigator />;

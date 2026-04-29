@@ -52,14 +52,14 @@ export default function HabitItem({ habit, onCheck, editMode, onEdit, onSwipeOpe
       onSwipeableWillOpen={() => onSwipeOpen?.(swipeableRef.current)}
       containerStyle={[styles.habitCard, (done || disabled) && styles.habitItemDone]}
     >
-      <View style={styles.habitCardContent}>
+      <View style={[styles.habitCardContent, showSchedule && styles.habitCardContentCompact]}>
         <CheckButton
           done={disabled ? false : done}
           onPress={disabled ? undefined : () => onCheck(habit.challenge_id, done)}
           size={44}
         />
         <TouchableOpacity
-          style={styles.habitInfo}
+          style={[styles.habitInfo, showSchedule && { gap: 0 }]}
           onLongPress={handleLongPress}
           delayLongPress={400}
           activeOpacity={1}
