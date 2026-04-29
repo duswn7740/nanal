@@ -43,7 +43,7 @@ const styles = StyleSheet.create({
     backgroundColor: colors.background,
   },
   side: {
-    width: 40,
+    minWidth: 40,
     alignItems: 'center',
   },
   title: {
