@@ -441,7 +441,7 @@ export default function HomeScreen() {
         visible={modalVisible}
         onClose={() => setModalVisible(false)}
         onAdded={(newHabit) => {
-          setHabits(prev => [...prev, { ...newHabit, is_done: false }]);
+          setHabits(prev => [...prev, { ...newHabit, challenge_id: newHabit.id, is_done: false }]);
           scheduleHabitNotifications(newHabit, user?.nickname);
           setModalVisible(false);
         }}

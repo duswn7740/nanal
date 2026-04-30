@@ -16,14 +16,11 @@ const GRID_PADDING = 16; // spacing.md
 const GRID_GAP = 8;      // spacing.sm
 const CARD_WIDTH = (Dimensions.get('window').width - GRID_PADDING * 2 - GRID_GAP * 2) / 3;
 
-const LEVEL_THRESHOLDS = [0, 100, 220, 360, 520, 700, 900];
 const MAX_LEVEL = 7;
 
-function getLevelProgress(exp, level) {
-  if (level >= MAX_LEVEL) return 1;
-  const current = LEVEL_THRESHOLDS[level - 1];
-  const next = LEVEL_THRESHOLDS[level];
-  return (exp - current) / (next - current);
+function getLevelProgress(exp, levelThreshold, nextThreshold) {
+  if (!nextThreshold) return 1;
+  return (exp - levelThreshold) / (nextThreshold - levelThreshold);
 }
 
 const XP_INFO = [
@@ -116,11 +113,11 @@ export default function CharacterScreen() {
     );
   }
 
-  const expProgress = active ? getLevelProgress(active.exp, active.level) : 0;
+  const expProgress = active ? getLevelProgress(active.exp, active.levelThreshold, active.nextThreshold) : 0;
   const expLabel = active?.level >= MAX_LEVEL
     ? '최종 진화 완료!'
     : active
-      ? `${active.exp} / ${LEVEL_THRESHOLDS[active.level]} XP`
+      ? `${active.exp} / ${active.nextThreshold} XP`
       : '';
 
   return (
@@ -150,7 +147,7 @@ export default function CharacterScreen() {
                   <Text style={styles.levelBadgeText}>Lv.{active.level}</Text>
                 </View>
               </View>
-              <ProgressBar value={active.exp} max={LEVEL_THRESHOLDS[active.level] ?? active.exp} label={expLabel} hideValue />
+              <ProgressBar value={active.exp - active.levelThreshold} max={(active.nextThreshold ?? active.exp) - active.levelThreshold} label={expLabel} hideValue />
             </View>
           </View>
         )}
