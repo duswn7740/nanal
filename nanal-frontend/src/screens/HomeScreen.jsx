@@ -451,9 +451,9 @@ export default function HomeScreen() {
         visible={giftBoxVisible}
         onClose={() => setGiftBoxVisible(false)}
         onCoinsUpdated={() => {}}
-        onWatchAd={(reward, onDone, onError) => {
+        onWatchAd={async (reward, onDone, onError) => {
           adContextRef.current = { type: 'box', reward, onDone };
-          const shown = showRewardedAd();
+          const shown = await showRewardedAd();
           if (!shown) { adContextRef.current = null; onError?.(); }
         }}
       />
@@ -480,9 +480,9 @@ export default function HomeScreen() {
         allDone={xpModal?.allDone ?? false}
         adDone={xpAdDone}
         onClose={() => { setXpModal(null); setXpAdDone(false); }}
-        onWatchAd={() => {
+        onWatchAd={async () => {
           adContextRef.current = 'xp';
-          const shown = showRewardedAd();
+          const shown = await showRewardedAd();
           if (!shown) { adContextRef.current = null; setAlertModal({ visible: true, message: '광고를 불러오는 중이에요. 잠시 후 다시 시도해줘요.' }); }
         }}
       />

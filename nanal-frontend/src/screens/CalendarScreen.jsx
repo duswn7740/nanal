@@ -153,7 +153,17 @@ export default function CalendarScreen() {
     }
   }, []);
 
-  useFocusEffect(useCallback(() => { fetchData(year, month); }, [year, month, fetchData]));
+  useFocusEffect(useCallback(() => {
+    const now = new Date();
+    const nowYear = now.getFullYear();
+    const nowMonth = now.getMonth() + 1;
+    if (nowYear !== year || nowMonth !== month) {
+      setYear(nowYear);
+      setMonth(nowMonth);
+    } else {
+      fetchData(year, month);
+    }
+  }, [year, month, fetchData]));
 
   const handleMonthChange = useCallback((y, m) => {
     setYear(y);
