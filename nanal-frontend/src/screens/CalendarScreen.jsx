@@ -8,6 +8,7 @@ import { colors, typography, fontFamily, spacing, radius } from '../theme';
 import Header from '../components/Header';
 import MonthNavigator from '../components/MonthNavigator';
 import api from '../api';
+import { getCalendarCache, setCalendarCache } from '../utils/calendarCache';
 import { getCharacterImage } from '../constants/characterImages';
 
 const SCREEN_WIDTH = Dimensions.get('window').width;
@@ -123,6 +124,14 @@ export default function CalendarScreen() {
   const [ownedChars, setOwnedChars] = useState([]);
 
   const fetchData = useCallback(async (y, m) => {
+    const cached = getCalendarCache(y, m);
+    if (cached) {
+      setCalendar(cached.calendar);
+      setHabits(cached.habits);
+      setCalendarData(cached.calendarData);
+      setOwnedChars(cached.ownedChars);
+      return;
+    }
     setLoading(true);
     try {
       const [calRes, calCharRes, ownedRes] = await Promise.all([
@@ -132,7 +141,6 @@ export default function CalendarScreen() {
       ]);
       const calData = calRes.data.calendar;
       setCalendar(calData);
-      // 해당 월 로그에 등장하는 습관 title 목록 (삭제된 습관도 포함, 전체삭제는 로그 소프트딜리트라 제외됨)
       const titleSet = new Set();
       const habitList = [];
       for (const logs of Object.values(calData)) {
@@ -143,9 +151,11 @@ export default function CalendarScreen() {
           }
         }
       }
+      const ownedList = (ownedRes.data.characters ?? []).filter(c => c.is_purchased || c.is_active);
       setHabits(habitList);
       setCalendarData(calCharRes.data);
-      setOwnedChars((ownedRes.data.characters ?? []).filter(c => c.is_purchased || c.is_active));
+      setOwnedChars(ownedList);
+      setCalendarCache(y, m, { calendar: calData, habits: habitList, calendarData: calCharRes.data, ownedChars: ownedList });
     } catch {
       setCalendar({});
     } finally {

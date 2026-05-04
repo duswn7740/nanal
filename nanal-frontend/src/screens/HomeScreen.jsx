@@ -20,6 +20,7 @@ import GiftBoxModal from './GiftBoxModal';
 import XpModal from './XpModal';
 import HabitItem from '../components/HabitItem';
 import { rescheduleAllHabits, scheduleHabitNotifications, cancelHabitNotifications } from '../utils/notifications';
+import { invalidateCalendarCache } from '../utils/calendarCache';
 import { useRewardedAd } from '../hooks/useRewardedAd';
 
 export default function HomeScreen() {
@@ -268,8 +269,10 @@ export default function HomeScreen() {
     try {
       if (isDone) {
         await api.post('/logs/uncheck', { challenge_id: challengeId });
+        invalidateCalendarCache();
       } else {
         const { data } = await api.post('/logs/checkin', { challenge_id: challengeId });
+        invalidateCalendarCache();
         if (data.xpGain > 0) {
           const modal = { xp: data.xpGain, allDone: data.xpGain >= 15 };
           xpModalRef.current = modal;
