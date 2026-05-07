@@ -20,10 +20,16 @@ async function grantExp(userId, amount, conn) {
   // 레벨업 시 이력 기록 (다음날부터 반영되도록 tomorrow 저장)
   if (newLevel > uc.level) {
     const tomorrow = getTomorrowKST();
-    await db.query(
-      'INSERT INTO character_level_history (user_id, character_id, level, leveled_up_at) VALUES (?, ?, ?, ?)',
-      [userId, uc.character_id, newLevel, tomorrow]
+    const [[existing]] = await db.query(
+      'SELECT id FROM character_level_history WHERE user_id = ? AND character_id = ? AND level = ?',
+      [userId, uc.character_id, newLevel]
     );
+    if (!existing) {
+      await db.query(
+        'INSERT INTO character_level_history (user_id, character_id, level, leveled_up_at) VALUES (?, ?, ?, ?)',
+        [userId, uc.character_id, newLevel, tomorrow]
+      );
+    }
   }
 }
 
