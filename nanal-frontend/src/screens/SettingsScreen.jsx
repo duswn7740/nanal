@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
 import {
   View, Text, TouchableOpacity, SafeAreaView,
-  StyleSheet, Modal, KeyboardAvoidingView, Platform, ScrollView,
+  StyleSheet, Modal, KeyboardAvoidingView, Platform, ScrollView, Linking,
 } from 'react-native';
 import ConfirmModal from '../components/ConfirmModal';
 import { colors, typography, fontFamily, spacing, radius } from '../theme';
@@ -113,6 +113,8 @@ export default function SettingsScreen() {
             <SettingRow label="이용약관" onPress={() => setPolicyType('terms')} />
             <View style={styles.divider} />
             <SettingRow label="개인정보처리방침" onPress={() => setPolicyType('privacy')} />
+            <View style={styles.divider} />
+            <SettingRow label="문의하기" onPress={() => Linking.openURL('mailto:hellorollinpebbles@gmail.com?subject=나날 문의')} />
           </View>
         </View>
 

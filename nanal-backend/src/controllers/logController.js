@@ -34,6 +34,8 @@ async function checkUnlocks(userId, conn) {
     { id: 2, condition: bestStreak >= 7 },   // 장미: 7일 연속
     { id: 3, condition: totalDays >= 30 },   // 병아리: 30일 달성
     { id: 4, condition: totalDays >= 50 },   // 토끼: 50일 달성
+    { id: 5, condition: bestStreak >= 30 },   // 수영: 30일 달성
+    { id: 6, condition: true },   // 바다: 코인구매
   ];
 
   // 해금 조건 만족 + 미보유 캐릭터만 병렬 인서트
