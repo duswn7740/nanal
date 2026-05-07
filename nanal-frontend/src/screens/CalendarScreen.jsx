@@ -115,6 +115,8 @@ export default function CalendarScreen() {
   const today = new Date();
   const [year, setYear] = useState(today.getFullYear());
   const [month, setMonth] = useState(today.getMonth() + 1);
+  const yearRef = useRef(today.getFullYear());
+  const monthRef = useRef(today.getMonth() + 1);
   const [calendar, setCalendar] = useState({});
   const [habits, setHabits] = useState([]);
   const [calendarData, setCalendarData] = useState(null);
@@ -167,18 +169,24 @@ export default function CalendarScreen() {
     const now = new Date();
     const nowYear = now.getFullYear();
     const nowMonth = now.getMonth() + 1;
-    if (nowYear !== year || nowMonth !== month) {
+    if (nowYear !== yearRef.current || nowMonth !== monthRef.current) {
+      yearRef.current = nowYear;
+      monthRef.current = nowMonth;
       setYear(nowYear);
       setMonth(nowMonth);
+      fetchData(nowYear, nowMonth);
     } else {
-      fetchData(year, month);
+      fetchData(yearRef.current, monthRef.current);
     }
-  }, [year, month, fetchData]));
+  }, [fetchData]));
 
   const handleMonthChange = useCallback((y, m) => {
+    yearRef.current = y;
+    monthRef.current = m;
     setYear(y);
     setMonth(m);
-  }, []);
+    fetchData(y, m);
+  }, [fetchData]);
 
   const handleSetHistory = async () => {
     setMenuVisible(false);
