@@ -38,7 +38,7 @@ export default function LoginScreen({ navigation }) {
         email: email.trim(),
         password,
       });
-      await login(data.token, data.user);
+      await login(data.token, data.refreshToken, data.user);
     } catch (err) {
       setError(err.response?.data?.message ?? '로그인에 실패했어요.');
     } finally {
@@ -59,7 +59,7 @@ export default function LoginScreen({ navigation }) {
         >
           <View style={styles.logoArea}>
             <Avatar size="lg" image={require('../../assets/icons/loginicon.png')} />
-            <Text style={styles.appName}>나날이</Text>
+            <Text style={styles.appName}>나날</Text>
             <Text style={styles.appSub}>매일 조금씩, 새싹이와 함께</Text>
           </View>
 

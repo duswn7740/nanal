@@ -204,9 +204,16 @@ export default function SettingsScreen() {
 }
 
 const styles = StyleSheet.create({
-  safeArea: { flex: 1, backgroundColor: colors.background },
+  safeArea: { 
+    flex: 1, 
+    backgroundColor: colors.background 
+  },
 
-  section: { paddingHorizontal: spacing.md, paddingTop: spacing.lg, gap: spacing.sm },
+  section: { 
+    paddingHorizontal: spacing.md, 
+    paddingTop: spacing.lg, 
+    gap: spacing.sm 
+  },
   sectionTitle: {
     fontSize: typography.xs,
     fontFamily: fontFamily.bold,
@@ -251,14 +258,20 @@ const styles = StyleSheet.create({
     fontFamily: fontFamily.regular,
     color: colors.textMain,
   },
-  rowLabelDanger: { color: colors.error },
+  rowLabelDanger: { 
+    color: colors.error 
+  },
   rowArrow: {
     fontSize: typography.sm,
     fontFamily: fontFamily.regular,
     color: colors.textSub,
   },
 
-  divider: { height: 1, backgroundColor: colors.border, marginHorizontal: spacing.md },
+  divider: { 
+    height: 1, 
+    backgroundColor: colors.border, 
+    marginHorizontal: spacing.md 
+  },
 
   version: {
     textAlign: 'center',
@@ -300,10 +313,17 @@ const styles = StyleSheet.create({
     color: colors.textMain,
     textAlign: 'center',
   },
-  modalButtons: { flexDirection: 'row', gap: spacing.sm },
-  modalBtn: { flex: 1 },
+  modalButtons: { 
+    flexDirection: 'row', 
+    gap: spacing.sm 
+  },
+  modalBtn: { 
+    flex: 1 
+  },
   modalError: {
-    fontSize: typography.sm, fontFamily: fontFamily.regular,
-    color: colors.error, textAlign: 'center',
+    fontSize: typography.sm, 
+    fontFamily: fontFamily.regular,
+    color: colors.error, 
+    textAlign: 'center',
   },
 });

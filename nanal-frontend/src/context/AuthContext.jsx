@@ -29,8 +29,9 @@ export function AuthProvider({ children }) {
     restoreSession();
   }, []);
 
-  const login = async (token, userData) => {
+  const login = async (token, refreshToken, userData) => {
     await AsyncStorage.setItem('token', token);
+    await AsyncStorage.setItem('refreshToken', refreshToken);
     setUser(userData);
     registerPushToken();
   };
@@ -38,7 +39,7 @@ export function AuthProvider({ children }) {
   const updateUser = (partial) => setUser(prev => ({ ...prev, ...partial }));
 
   const logout = useCallback(async () => {
-    await AsyncStorage.removeItem('token');
+    await AsyncStorage.multiRemove(['token', 'refreshToken']);
     setUser(null);
   }, []);
 

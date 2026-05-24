@@ -70,7 +70,7 @@ export default function SignupScreen({ navigation }) {
         password,
       });
       // 회원가입 성공: 바로 로그인 처리 → 홈으로 이동
-      await login(data.token, data.user);
+      await login(data.token, data.refreshToken, data.user);
     } catch (err) {
       setServerError(err.response?.data?.message ?? '회원가입에 실패했어요. 다시 시도해줘요.');
     } finally {

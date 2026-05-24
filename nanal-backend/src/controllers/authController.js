@@ -1,7 +1,14 @@
 const bcrypt = require('bcrypt');
 const jwt = require('jsonwebtoken');
+const crypto = require('crypto');
 const nodemailer = require('nodemailer');
 const pool = require('../config/db');
+
+const REFRESH_TOKEN_EXPIRES_MS = 30 * 24 * 60 * 60 * 1000; // 30일
+
+function generateRefreshToken() {
+  return crypto.randomBytes(40).toString('hex');
+}
 
 const transporter = nodemailer.createTransport({
   service: 'gmail',
@@ -60,10 +67,17 @@ async function signup(req, res) {
     );
 
     const token = generateToken(result.insertId, email, nickname);
+    const refreshToken = generateRefreshToken();
+    const refreshTokenExpiresAt = new Date(Date.now() + REFRESH_TOKEN_EXPIRES_MS);
+    await pool.query(
+      'UPDATE users SET refresh_token = ?, refresh_token_expires_at = ? WHERE id = ?',
+      [refreshToken, refreshTokenExpiresAt, result.insertId]
+    );
 
     return res.status(201).json({
       message: '회원가입 성공',
       token,
+      refreshToken,
       user: { id: result.insertId, email, nickname, sprout_state: 0, timezone },
     });
   } catch (err) {
@@ -102,10 +116,17 @@ async function login(req, res) {
     }
 
     const token = generateToken(user.id, user.email, user.nickname);
+    const refreshToken = generateRefreshToken();
+    const refreshTokenExpiresAt = new Date(Date.now() + REFRESH_TOKEN_EXPIRES_MS);
+    await pool.query(
+      'UPDATE users SET refresh_token = ?, refresh_token_expires_at = ? WHERE id = ?',
+      [refreshToken, refreshTokenExpiresAt, user.id]
+    );
 
     return res.status(200).json({
       message: '로그인 성공',
       token,
+      refreshToken,
       user: {
         id: user.id,
         email: user.email,
@@ -225,11 +246,55 @@ async function updatePushToken(req, res) {
   }
 }
 
+// POST /api/auth/refresh
+async function refreshToken(req, res) {
+  const { refreshToken } = req.body;
+  if (!refreshToken) return res.status(400).json({ message: 'refreshToken이 필요합니다.' });
+
+  const conn = await pool.getConnection();
+  try {
+    await conn.beginTransaction();
+
+    const [[user]] = await conn.query(
+      'SELECT id, email, nickname, refresh_token_expires_at FROM users WHERE refresh_token = ? AND deleted_at IS NULL FOR UPDATE',
+      [refreshToken]
+    );
+    if (!user) {
+      await conn.rollback();
+      return res.status(401).json({ message: '유효하지 않은 refresh token입니다.' });
+    }
+    if (new Date() > new Date(user.refresh_token_expires_at)) {
+      await conn.rollback();
+      return res.status(401).json({ message: 'refresh token이 만료되었습니다.' });
+    }
+
+    const newToken = generateToken(user.id, user.email, user.nickname);
+    const newRefreshToken = generateRefreshToken();
+    const newExpiresAt = new Date(Date.now() + REFRESH_TOKEN_EXPIRES_MS);
+    await conn.query(
+      'UPDATE users SET refresh_token = ?, refresh_token_expires_at = ? WHERE id = ?',
+      [newRefreshToken, newExpiresAt, user.id]
+    );
+
+    await conn.commit();
+    return res.json({ token: newToken, refreshToken: newRefreshToken });
+  } catch (err) {
+    await conn.rollback();
+    console.error('refreshToken error:', err);
+    return res.status(500).json({ message: '서버 오류가 발생했습니다.' });
+  } finally {
+    conn.release();
+  }
+}
+
 // DELETE /api/auth/withdraw
 async function withdraw(req, res) {
   const userId = req.user.userId;
   try {
-    await pool.query('UPDATE users SET deleted_at = NOW() WHERE id = ?', [userId]);
+    await pool.query(
+      'UPDATE users SET deleted_at = NOW(), refresh_token = NULL, refresh_token_expires_at = NULL WHERE id = ?',
+      [userId]
+    );
     return res.json({ message: '회원탈퇴가 완료되었습니다.' });
   } catch (err) {
     console.error('withdraw error:', err);
@@ -237,4 +302,4 @@ async function withdraw(req, res) {
   }
 }
 
-module.exports = { signup, login, me, updateNickname, withdraw, forgotPassword, updatePassword, updatePushToken };
+module.exports = { signup, login, me, updateNickname, withdraw, forgotPassword, updatePassword, updatePushToken, refreshToken };

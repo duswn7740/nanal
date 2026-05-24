@@ -19,7 +19,7 @@ import EditHabitModal from './EditHabitModal';
 import GiftBoxModal from './GiftBoxModal';
 import XpModal from './XpModal';
 import HabitItem from '../components/HabitItem';
-import { rescheduleAllHabits, scheduleHabitNotifications, cancelHabitNotifications } from '../utils/notifications';
+import { rescheduleAllHabits, scheduleHabitNotifications, cancelHabitNotifications, requestNotificationPermission, registerPushToken } from '../utils/notifications';
 import { invalidateCalendarCache } from '../utils/calendarCache';
 import { useRewardedAd } from '../hooks/useRewardedAd';
 
@@ -65,6 +65,12 @@ export default function HomeScreen() {
 
     adContextRef.current = null;
   }, []));
+
+  useEffect(() => {
+    requestNotificationPermission().then(granted => {
+      if (granted) registerPushToken();
+    });
+  }, []);
 
   const fetchToday = useCallback(async () => {
     setError(false);
