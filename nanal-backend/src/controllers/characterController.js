@@ -60,10 +60,7 @@ async function setActiveCharacter(req, res) {
     );
     if (rows.length === 0) return res.status(404).json({ message: '캐릭터를 찾을 수 없습니다.' });
 
-    await pool.query(
-      "UPDATE user_characters SET is_active = 0, activated_at = COALESCE(activated_at, '2000-01-01') WHERE user_id = ? AND is_active = 1",
-      [userId]
-    );
+    await pool.query('UPDATE user_characters SET is_active = 0 WHERE user_id = ?', [userId]);
     await pool.query('UPDATE user_characters SET is_active = 1, activated_at = CURDATE() WHERE id = ?', [ucId]);
 
     return res.json({ message: '메인 캐릭터가 변경되었습니다.' });

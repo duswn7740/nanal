@@ -4,12 +4,12 @@ const { grantExp } = require('../utils/character');
 
 // 선물상자 보상 테이블
 const REWARDS = [
-  { type: 'xp',   amount: 30,  weight: 8 },
+  { type: 'xp',   amount: 30,  weight: 7 },
   { type: 'coin',   amount: 10, weight: 25 },
   { type: 'coin', amount: 15,  weight: 36 },
   { type: 'coin', amount: 20,  weight: 17 },
   { type: 'coin', amount: 25,  weight: 10 },
-  { type: 'coin',   amount: 30,  weight: 4 },
+  { type: 'coin',   amount: 30,  weight: 5 },
 ];
 const TOTAL_WEIGHT = REWARDS.reduce((sum, r) => sum + r.weight, 0); // 100
 
